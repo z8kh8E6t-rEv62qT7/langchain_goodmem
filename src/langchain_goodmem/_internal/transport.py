@@ -45,7 +45,20 @@ class GoodMemTransport:
         )
 
     def create_space(self, request: GoodMemSpaceCreateRequest) -> Any:
-        """Create a GoodMem space from one normalized request payload."""
+        """Create a GoodMem space from one normalized request payload.
+
+        Args:
+            request: Package-owned create-space payload.
+
+        Returns:
+            The raw GoodMem SDK response object for the created space.
+
+        Raises:
+            GoodMemDuplicateIDError: If GoodMem reports that the space already
+                exists.
+            GoodMemAPIError: If the SDK rejects the request or raises any other
+                backend failure.
+        """
         from goodmem.types import SpaceEmbedderConfig
 
         try:
@@ -76,7 +89,20 @@ class GoodMemTransport:
         space_id: str,
         writes: list[GoodMemWriteRequest],
     ) -> Any:
-        """Create one batch of GoodMem memories from normalized write payloads."""
+        """Create one batch of GoodMem memories from normalized write payloads.
+
+        Args:
+            space_id: Target GoodMem space ID.
+            writes: Package-owned memory-write payloads in request order.
+
+        Returns:
+            The raw GoodMem SDK batch-create response.
+
+        Raises:
+            GoodMemDuplicateIDError: If GoodMem reports duplicate memory IDs.
+            GoodMemAPIError: If the SDK rejects the request or raises any other
+                backend failure.
+        """
         from goodmem import MemoryCreationRequest
 
         try:
@@ -112,7 +138,22 @@ class GoodMemTransport:
         k: int,
         filter_expression: str | None = None,
     ) -> Iterator[Any]:
-        """Yield one GoodMem retrieval stream while normalizing setup failures."""
+        """Yield one GoodMem retrieval stream while normalizing setup failures.
+
+        Args:
+            space_id: Target GoodMem space ID.
+            query: Semantic retrieval query text.
+            k: Requested result count forwarded to GoodMem.
+            filter_expression: Optional raw GoodMem filter expression string.
+
+        Yields:
+            The SDK-managed stream of retrieval events.
+
+        Raises:
+            GoodMemAPIError: If stream setup or stream teardown fails for a
+                backend reason. Consumer exceptions raised while iterating the
+                yielded events are preserved as-is.
+        """
         from goodmem.types import SpaceKey
 
         try:
@@ -153,7 +194,18 @@ class GoodMemTransport:
             raise GoodMemAPIError(_describe_generic_backend_failure(exc)) from exc
 
     def get_embedder(self, *, embedder_id: str) -> Any:
-        """Load one GoodMem embedder response by ID."""
+        """Load one GoodMem embedder response by ID.
+
+        Args:
+            embedder_id: GoodMem embedder identifier to resolve.
+
+        Returns:
+            The raw GoodMem SDK embedder response.
+
+        Raises:
+            GoodMemAPIError: If GoodMem rejects the lookup or any other backend
+                failure occurs.
+        """
         try:
             return self._client.embedders.get(id=embedder_id)
         except self._api_error_type as exc:

@@ -46,6 +46,35 @@ def test_connection_constructor_rejects_blank_values() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        (
+            {"api_key": 123, "base_url": "https://goodmem.example"},
+            "api_key",
+        ),
+        (
+            {"api_key": "gm-key", "base_url": 123},
+            "base_url",
+        ),
+        (
+            {
+                "api_key": "gm-key",
+                "base_url": "https://goodmem.example",
+                "verify": 123,
+            },
+            "verify",
+        ),
+    ],
+)
+def test_connection_constructor_rejects_invalid_value_types(
+    kwargs: dict[str, object],
+    match: str,
+) -> None:
+    with pytest.raises(GoodMemConfigurationError, match=match):
+        GoodMemConnection(**kwargs)  # type: ignore[arg-type]
+
+
 def test_from_env_trims_values_and_accepts_explicit_verify(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

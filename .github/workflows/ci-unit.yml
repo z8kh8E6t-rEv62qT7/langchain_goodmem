@@ -24,10 +24,13 @@ jobs:
       - name: Install test dependencies
         run: pip install -e '.[test]'
 
-      - name: Run unit tests
+      - name: Run unit tests with coverage
         run: >
-          python -m pytest -q
+          coverage run --source=langchain_goodmem -m pytest -q
           tests/test_connection_unit.py
           tests/test_embeddings_unit.py
           tests/test_transport_unit.py
           tests/test_vectorstore_unit.py
+
+      - name: Print coverage summary
+        run: coverage report -m

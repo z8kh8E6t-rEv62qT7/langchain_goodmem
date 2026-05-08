@@ -102,14 +102,18 @@ class SupportsMemoryOperationsTransport(Protocol):
     from the full GoodMem client surface.
     """
 
-    def create_space(self, request: GoodMemSpaceCreateRequest) -> object: ...
+    def create_space(self, request: GoodMemSpaceCreateRequest) -> object:
+        """Create one GoodMem space from a normalized request payload."""
+        ...
 
     def batch_create_memories(
         self,
         *,
         space_id: str,
         writes: list[GoodMemWriteRequest],
-    ) -> object: ...
+    ) -> object:
+        """Create one batch of GoodMem memories in the target space."""
+        ...
 
     def retrieve_memories(
         self,
@@ -118,7 +122,9 @@ class SupportsMemoryOperationsTransport(Protocol):
         query: str,
         k: int,
         filter_expression: str | None = None,
-    ) -> AbstractContextManager[Iterable[Any]]: ...
+    ) -> AbstractContextManager[Iterable[Any]]:
+        """Return a context-managed stream of GoodMem retrieval events."""
+        ...
 
 
 class SupportsEmbedderTransport(Protocol):
@@ -128,4 +134,6 @@ class SupportsEmbedderTransport(Protocol):
     tests can stub provider setup independently.
     """
 
-    def get_embedder(self, *, embedder_id: str) -> object: ...
+    def get_embedder(self, *, embedder_id: str) -> object:
+        """Load one GoodMem embedder response by ID."""
+        ...

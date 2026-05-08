@@ -537,3 +537,27 @@ def test_embedder_lookup_failures_are_preserved(
 
     with pytest.raises(GoodMemAPIError, match="backend failed"):
         embeddings.embed_query("hello")
+
+
+def test_missing_openai_embeddings_class_raises_configuration_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_API_KEY", "upstream-key")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_DIMENSIONS", "1024")
+    transport = FakeTransport()
+    _patch_transport(monkeypatch, transport)
+
+    class FakeModule:
+        pass
+
+    monkeypatch.setattr(
+        "langchain_goodmem._internal.providers.importlib.import_module",
+        lambda name: FakeModule(),
+    )
+    embeddings = GoodMemEmbeddings(embedder_id="embedder-123", connection=_connection())
+
+    with pytest.raises(
+        GoodMemConfigurationError,
+        match="could not load OpenAIEmbeddings",
+    ):
+        embeddings.embed_query("hello")

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "langchain-goodmem"
-version = "0.1.0"
+version = "0.1.1"
 description = "LangChain VectorStore and Embeddings integration for GoodMem semantic search."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,6 +19,7 @@ openai = [
   "langchain-openai>=1,<2",
 ]
 test = [
+  "coverage>=7,<8",
   "langchain-openai>=1,<2",
   "pytest>=8,<9",
 ]

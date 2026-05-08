@@ -120,6 +120,22 @@ class GoodMemEmbeddings(Embeddings):
         self,
         operation: Callable[[Embeddings], ProviderResult],
     ) -> ProviderResult:
+        """Run one operation against the lazily initialized provider adapter.
+
+        Args:
+            operation: Callable that receives the resolved upstream
+                ``Embeddings`` implementation.
+
+        Returns:
+            The result returned by the provider operation, such as one
+            embedding vector or a list of embedding vectors.
+
+        Raises:
+            GoodMemConfigurationError: If embedder setup fails before the
+                provider call can succeed.
+            GoodMemAPIError: If the upstream provider fails or raises an
+                unexpected exception.
+        """
         try:
             return operation(self._get_provider_embeddings())
         except GoodMemConfigurationError:
@@ -135,6 +151,11 @@ class GoodMemEmbeddings(Embeddings):
             ) from exc
 
     def _get_embedder_config(self) -> GoodMemEmbedderConfig:
+        """Load and cache the normalized GoodMem embedder configuration.
+
+        Returns:
+            The validated ``GoodMemEmbedderConfig`` for ``self.embedder_id``.
+        """
         if self._embedder_config is None:
             self._embedder_config = load_embedder_config(
                 self._transport,
@@ -143,6 +164,12 @@ class GoodMemEmbeddings(Embeddings):
         return self._embedder_config
 
     def _get_provider_embeddings(self) -> Embeddings:
+        """Load and cache the upstream LangChain embeddings implementation.
+
+        Returns:
+            The upstream ``Embeddings`` implementation derived from the GoodMem
+            embedder configuration.
+        """
         if self._provider_embeddings is None:
             self._provider_embeddings = create_provider_embeddings(
                 self._get_embedder_config(),

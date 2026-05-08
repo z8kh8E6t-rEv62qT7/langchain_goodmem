@@ -95,7 +95,13 @@ class GoodMemVectorStore(VectorStore):
 
     @property
     def embeddings(self) -> Embeddings | None:
-        """Return the retained embeddings object when one exists."""
+        """Return the retained embeddings object when one exists.
+
+        Returns:
+            The ``GoodMemEmbeddings`` instance retained by
+            ``GoodMemVectorStore.create(..., embedding=...)``, or ``None`` for
+            existing-space stores and ``from_texts(...)`` compatibility stores.
+        """
         return self._embedding
 
     @classmethod
