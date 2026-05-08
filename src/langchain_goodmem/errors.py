@@ -36,6 +36,13 @@ class GoodMemAPIError(GoodMemOperationError):
 class GoodMemBatchWriteResultItem:
     """Stable per-item batch write result surfaced to callers.
 
+    Args:
+        request_index: Input position for the original write request.
+        success: Whether the corresponding write succeeded.
+        memory_id: Created or caller-provided memory ID when available.
+        error_code: Backend error code for failures, when exposed.
+        error_message: Backend error message for failures, when exposed.
+
     Attributes:
         request_index: Input position for the original write request.
         success: Whether the corresponding write succeeded.
@@ -53,6 +60,11 @@ class GoodMemBatchWriteResultItem:
 
 class GoodMemBatchPartialFailureError(GoodMemAPIError):
     """Raised when a batch write partially succeeds and partially fails.
+
+    Args:
+        message: Summary of the partial-failure condition.
+        created_ids: Successfully created memory IDs from the same batch.
+        results: Per-item batch result details in request order.
 
     Attributes:
         created_ids: Successfully created memory IDs from the same batch.

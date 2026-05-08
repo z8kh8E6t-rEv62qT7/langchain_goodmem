@@ -41,7 +41,8 @@ def create_space(
         request: Normalized create-space payload.
 
     Returns:
-        The created GoodMem space ID.
+        The non-empty ``space_id`` string extracted from the transport
+        response for the newly created GoodMem space.
 
     Raises:
         GoodMemAPIError: If GoodMem does not return a usable ``space_id``.

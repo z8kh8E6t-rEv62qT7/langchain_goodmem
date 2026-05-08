@@ -1,12 +1,27 @@
 """langchain-goodmem package entry point and quick-start guide.
 
-This package exposes GoodMem semantic search to LangChain code through a small,
-explicit public surface:
+This package exposes a small, explicit LangChain-facing surface for GoodMem:
 
-- ``GoodMemConnection`` for shared transport configuration
-- ``GoodMemVectorStore`` for write and chunk-level semantic retrieval workflows
+- ``GoodMemConnection`` for shared API/TLS configuration
+- ``GoodMemVectorStore`` for writing memories and retrieving semantic matches
 - ``GoodMemEmbeddings`` for GoodMem-managed ``OPENAI``-compatible embedders
-- ``GoodMemSpaceEmbedder`` for create-time embedder declarations
+- ``GoodMemSpaceEmbedder`` for create-time space/embedder declarations
+
+GoodMem concepts used throughout this package:
+
+- a ``space`` is the top-level container you write into and search within
+- a ``memory`` is one stored item of source content plus metadata
+- GoodMem processes each memory asynchronously and may split it into one or
+  more retrievable ``chunk`` values
+
+That distinction matters when you read search results:
+
+- write methods such as ``add_documents(...)`` and ``add_texts(...)`` return
+  memory IDs
+- search methods return LangChain ``Document`` values whose ``Document.id`` is
+  the GoodMem chunk ID for the matching chunk
+- the parent memory ID and originating space ID remain available in
+  ``Document.metadata`` under ``_goodmem_memory_id`` and ``_goodmem_space_id``
 
 Python 3.10 or newer is required.
 
@@ -28,7 +43,14 @@ variables consumed by ``GoodMemConnection.from_env()``:
 - ``GOODMEM_API_KEY``
 - ``GOODMEM_BASE_URL``
 
-Minimal add-and-search flow:
+Choose a store-binding flow:
+
+- if you already have a GoodMem space ID from the GoodMem SDK, CLI, or web
+  console, bind directly with ``GoodMemVectorStore(space_id=..., ...)``
+- if you need the package to create a new space for you, use
+  ``GoodMemVectorStore.create(...)``
+
+Minimal existing-space add-and-search flow:
 
 ::
 
@@ -37,10 +59,10 @@ Minimal add-and-search flow:
 
     connection = GoodMemConnection.from_env()
     store = GoodMemVectorStore(
-        space_id="your-space-id",
+        space_id="your-existing-space-id",
         connection=connection,
     )
-    store.add_documents(
+    memory_ids = store.add_documents(
         [Document(page_content="GoodMem stores semantically searchable memories.")],
         ids=["memory-1"],
     )
@@ -48,7 +70,12 @@ Minimal add-and-search flow:
         "How does GoodMem work with LangChain?",
         k=1,
     )
-    print(results[0].page_content)
+    print("created memory:", memory_ids[0])
+    print("matching chunk:", results[0].id)
+    print("parent memory:", results[0].metadata["_goodmem_memory_id"])
+
+Search visibility is eventually consistent because GoodMem processes written
+memories before they become searchable.
 
 For fuller workflows:
 

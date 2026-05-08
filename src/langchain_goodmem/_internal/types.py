@@ -19,6 +19,13 @@ from ..space_embedders import GoodMemSpaceEmbedder
 class GoodMemWriteRequest:
     """Normalized write payload used by the vector store.
 
+    Args:
+        page_content: Validated text content that will be stored as the memory
+            body.
+        metadata: Normalized metadata dictionary attached to the memory.
+        memory_id: Optional strict-create memory ID supplied by the caller.
+        content_type: Optional transport-level content type override.
+
     Attributes:
         page_content: Validated text content that will be stored as the memory
             body.
@@ -36,6 +43,14 @@ class GoodMemWriteRequest:
 @dataclass(frozen=True)
 class GoodMemSearchHit:
     """Normalized semantic search hit returned to the vector store.
+
+    Args:
+        chunk_id: GoodMem chunk identifier that becomes ``Document.id``.
+        memory_id: Parent memory identifier preserved in metadata.
+        space_id: Originating GoodMem space identifier.
+        page_content: Retrieved chunk text.
+        metadata: Merged memory-level and chunk-level metadata.
+        score: Retrieval relevance score.
 
     Attributes:
         chunk_id: GoodMem chunk identifier that becomes ``Document.id``.
@@ -58,6 +73,11 @@ class GoodMemSearchHit:
 class GoodMemSpaceCreateRequest:
     """Normalized create-space request passed through the transport boundary.
 
+    Args:
+        name: Requested GoodMem space name.
+        space_embedders: Package-owned embedder declarations to attach to the
+            created space.
+
     Attributes:
         name: Requested GoodMem space name.
         space_embedders: Package-owned embedder declarations to attach to the
@@ -71,6 +91,17 @@ class GoodMemSpaceCreateRequest:
 @dataclass(frozen=True)
 class GoodMemEmbedderConfig:
     """Normalized embedder metadata used by ``GoodMemEmbeddings``.
+
+    Args:
+        embedder_id: GoodMem embedder identifier.
+        provider_type: Normalized provider type such as ``OPENAI``.
+        endpoint_url: Upstream provider endpoint URL.
+        api_path: Optional provider-specific embeddings path segment.
+        model_identifier: Upstream embedding model identifier.
+        dimensionality: Configured embedding dimensionality.
+        supported_modalities: Normalized modality list exposed by GoodMem.
+        credential_kind: Credential mechanism reported by GoodMem, when any.
+        inline_api_key: Readable inline API key exposed by GoodMem, when any.
 
     Attributes:
         embedder_id: GoodMem embedder identifier.
@@ -103,7 +134,14 @@ class SupportsMemoryOperationsTransport(Protocol):
     """
 
     def create_space(self, request: GoodMemSpaceCreateRequest) -> object:
-        """Create one GoodMem space from a normalized request payload."""
+        """Create one GoodMem space from a normalized request payload.
+
+        Args:
+            request: Package-owned create-space payload.
+
+        Returns:
+            A transport-specific response object describing the created space.
+        """
         ...
 
     def batch_create_memories(
@@ -112,7 +150,16 @@ class SupportsMemoryOperationsTransport(Protocol):
         space_id: str,
         writes: list[GoodMemWriteRequest],
     ) -> object:
-        """Create one batch of GoodMem memories in the target space."""
+        """Create one batch of GoodMem memories in the target space.
+
+        Args:
+            space_id: Target GoodMem space ID.
+            writes: Package-owned memory-write payloads in request order.
+
+        Returns:
+            A transport-specific batch response object containing one result per
+            write request.
+        """
         ...
 
     def retrieve_memories(
@@ -123,7 +170,18 @@ class SupportsMemoryOperationsTransport(Protocol):
         k: int,
         filter_expression: str | None = None,
     ) -> AbstractContextManager[Iterable[Any]]:
-        """Return a context-managed stream of GoodMem retrieval events."""
+        """Return a context-managed stream of GoodMem retrieval events.
+
+        Args:
+            space_id: Target GoodMem space ID.
+            query: Semantic retrieval query text.
+            k: Maximum number of results requested from the transport.
+            filter_expression: Optional raw GoodMem filter expression string.
+
+        Returns:
+            A context manager that yields an iterable of transport-specific
+            retrieval events.
+        """
         ...
 
 
@@ -135,5 +193,12 @@ class SupportsEmbedderTransport(Protocol):
     """
 
     def get_embedder(self, *, embedder_id: str) -> object:
-        """Load one GoodMem embedder response by ID."""
+        """Load one GoodMem embedder response by ID.
+
+        Args:
+            embedder_id: GoodMem embedder identifier to resolve.
+
+        Returns:
+            A transport-specific embedder response object.
+        """
         ...

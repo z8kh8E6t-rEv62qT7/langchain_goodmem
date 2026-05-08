@@ -34,7 +34,9 @@ templates_path: list[str] = []
 autosummary_generate = False
 autoclass_content = "both"
 autodoc_member_order = "bysource"
-autodoc_typehints = "description"
+# Let sphinx-autodoc-typehints own type-hint rendering so autodoc does not add
+# a second generated parameter block on top of Google-style docstrings.
+autodoc_typehints = "none"
 typehints_use_rtype = False
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False

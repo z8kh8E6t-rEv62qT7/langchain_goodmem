@@ -24,7 +24,16 @@ _SDK_ERROR_DETAIL_LIMIT = 500
 
 
 class GoodMemTransport:
-    """Official GoodMem SDK backed transport implementation."""
+    """Official GoodMem SDK backed transport implementation.
+
+    Args:
+        connection: Validated GoodMem transport configuration used to construct
+            the underlying SDK client.
+
+    Raises:
+        GoodMemConfigurationError: If the optional ``goodmem`` dependency is
+            not installed.
+    """
 
     def __init__(self, connection: GoodMemConnection) -> None:
         try:

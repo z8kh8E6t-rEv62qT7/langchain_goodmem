@@ -94,7 +94,16 @@ def create_provider_embeddings(
 
 
 def format_provider_failure_message(prefix: str, exc: Exception) -> str:
-    """Format one provider failure message with bounded detail text."""
+    """Format one provider failure message with bounded detail text.
+
+    Args:
+        prefix: Stable message prefix that identifies the failing operation.
+        exc: Original exception raised by the provider or setup path.
+
+    Returns:
+        A human-readable error string that includes bounded exception detail
+        text when any detail is available.
+    """
     detail = _bounded_detail_text(str(exc))
     if detail is None:
         return f"{prefix}."
@@ -189,6 +198,10 @@ def validate_compatible_embedder_config(embedder: GoodMemEmbedderConfig) -> None
     Args:
         embedder: Normalized GoodMem embedder configuration.
 
+    Returns:
+        ``None`` when the embedder configuration satisfies all provider
+        compatibility requirements.
+
     Raises:
         GoodMemConfigurationError: If provider type, modality, endpoint, model,
             dimensions, or API path assumptions are not satisfied.
@@ -222,7 +235,16 @@ def validate_compatible_embedder_config(embedder: GoodMemEmbedderConfig) -> None
 
 
 def build_provider_base_url(embedder: GoodMemEmbedderConfig) -> str:
-    """Build the upstream provider base URL from endpoint and API path."""
+    """Build the upstream provider base URL from endpoint and API path.
+
+    Args:
+        embedder: Normalized GoodMem embedder configuration.
+
+    Returns:
+        The upstream provider base URL expected by
+        ``langchain_openai.OpenAIEmbeddings`` after removing any terminal
+        ``/embeddings`` path segment.
+    """
     endpoint_url = embedder.endpoint_url.rstrip("/")
     api_path = (embedder.api_path or "").strip()
     if not api_path:

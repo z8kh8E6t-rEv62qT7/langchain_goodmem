@@ -7,9 +7,19 @@ Two primary usage modes are supported:
 - bind to an existing GoodMem space with ``GoodMemVectorStore(...)``
 - create a new GoodMem space with ``GoodMemVectorStore.create(...)``
 
+GoodMem uses three related concepts that map differently to LangChain:
+
+- a ``space`` is the search scope
+- a ``memory`` is one stored item of source content plus metadata
+- a ``chunk`` is a searchable fragment produced by GoodMem from a memory
+
+Write methods in this module create memories. Retrieval methods return chunks.
+One memory can therefore produce multiple search results over time.
+
 Write behavior is intentionally explicit:
 
-- caller-provided IDs use strict create-if-absent semantics
+- caller-provided IDs are treated as memory IDs with strict create-if-absent
+  semantics
 - ``Document.id`` is used as a fallback memory ID source in
   ``add_documents(...)``
 - duplicate IDs in a single call raise ``GoodMemDuplicateIDError`` before any
@@ -18,14 +28,27 @@ Write behavior is intentionally explicit:
 Search behavior is chunk-level:
 
 - ``Document.id`` in search results is the GoodMem ``chunk_id``
-- parent memory and space identifiers remain available in ``Document.metadata``
+- the parent memory ID is preserved in ``Document.metadata`` as
+  ``_goodmem_memory_id``
+- the originating space ID is preserved in ``Document.metadata`` as
+  ``_goodmem_space_id``
 - scored results also expose ``_goodmem_score`` in metadata
+
+Metadata filters are passed through to GoodMem unchanged. They operate on the
+memory-level metadata JSON attached to each stored memory, not on LangChain
+``Document.metadata`` after conversion and not on chunk text. The documented
+GoodMem filter language uses helpers such as ``val('$.field')`` and
+``exists('$.array[*]')``. A minimal equality example is
+``val('$.lang') = 'en'``.
+
+GoodMem processes new memories asynchronously before they become searchable, so
+fresh writes may not appear in retrieval results immediately.
 
 The create helper intentionally keeps a minimal LangChain-facing surface. If
 you need GoodMem-specific space options such as labels, owner settings, public
-access controls, or explicit space IDs, create the space through the GoodMem
-SDK first and then attach a ``GoodMemVectorStore`` to the resulting
-``space_id``.
+access controls, explicit chunking configuration, or explicit space IDs, create
+the space through the GoodMem SDK first and then attach a
+``GoodMemVectorStore`` to the resulting ``space_id``.
 """
 
 from __future__ import annotations
@@ -69,6 +92,12 @@ def _create_transport(connection: GoodMemConnection) -> GoodMemTransport:
 class GoodMemVectorStore(VectorStore):
     """LangChain vector store for GoodMem-managed semantic add/search.
 
+    Each instance is bound to exactly one GoodMem space. ``add_documents(...)``
+    and ``add_texts(...)`` write memories into that space. Search methods return
+    chunk-level LangChain ``Document`` values derived from GoodMem retrieval
+    hits, which means the returned ``Document.id`` identifies the matching
+    chunk, not the original written memory.
+
     Args:
         space_id: Existing GoodMem space identifier to bind to.
         connection: Shared GoodMem transport configuration.
@@ -100,7 +129,9 @@ class GoodMemVectorStore(VectorStore):
         Returns:
             The ``GoodMemEmbeddings`` instance retained by
             ``GoodMemVectorStore.create(..., embedding=...)``, or ``None`` for
-            existing-space stores and ``from_texts(...)`` compatibility stores.
+            existing-space stores, stores created with explicit
+            ``embedders=[GoodMemSpaceEmbedder(...)]``, and
+            ``from_texts(...)`` compatibility stores.
         """
         return self._embedding
 
@@ -120,12 +151,30 @@ class GoodMemVectorStore(VectorStore):
         - ``embedders=[GoodMemSpaceEmbedder(...)]``
         - ``embedding=GoodMemEmbeddings(...)``
 
+        Choose ``embedders=...`` when you already know the GoodMem embedder ID
+        or IDs that should be attached to the new space and you only need
+        server-side retrieval behavior.
+
+        Choose ``embedding=...`` when you want the same GoodMem embedder to
+        serve both roles:
+
+        - attach its ``embedder_id`` to the new space
+        - remain available locally as ``store.embeddings`` for LangChain code
+          that also calls ``embed_query(...)`` or ``embed_documents(...)``
+
+        In other words, ``embedding=GoodMemEmbeddings(...)`` is the
+        single-embedder shorthand that also preserves a usable LangChain
+        ``Embeddings`` object on the returned store.
+
         Args:
             name: Requested GoodMem space name.
-            embedders: Explicit GoodMem space-embedder declarations.
+            embedders: Explicit GoodMem space-embedder declarations. Use this
+                when you want to declare one or more existing GoodMem embedder
+                IDs directly.
             connection: Shared GoodMem transport configuration.
             embedding: GoodMem-managed embeddings adapter whose embedder ID
-                should be attached to the new space.
+                should be attached to the new space and then retained on the
+                returned store as ``store.embeddings``.
 
         Returns:
             A vector store bound to the created space.
@@ -161,6 +210,10 @@ class GoodMemVectorStore(VectorStore):
     ) -> list[str]:
         """Add LangChain documents to the bound GoodMem space.
 
+        Each input document becomes one GoodMem memory. GoodMem may later split
+        that memory into one or more searchable chunks during asynchronous
+        processing.
+
         Args:
             documents: Documents whose ``page_content`` becomes GoodMem memory
                 content.
@@ -169,8 +222,9 @@ class GoodMemVectorStore(VectorStore):
             **kwargs: No service-specific keyword arguments are supported.
 
         Returns:
-            Created or accepted memory IDs in request order. Empty input returns
-            an empty list without contacting GoodMem.
+            Created or accepted memory IDs in request order. These are memory
+            IDs, not chunk IDs. Empty input returns an empty list without
+            contacting GoodMem.
 
         Raises:
             ValueError: If document text, IDs, or unexpected keyword arguments
@@ -217,6 +271,10 @@ class GoodMemVectorStore(VectorStore):
     ) -> list[str]:
         """Add raw texts to the bound GoodMem space.
 
+        Each input text becomes one GoodMem memory. GoodMem may later split that
+        memory into one or more searchable chunks during asynchronous
+        processing.
+
         Args:
             texts: Iterable of non-empty strings. Passing one plain string is
                 rejected because it is ambiguous with an iterable of characters.
@@ -225,8 +283,9 @@ class GoodMemVectorStore(VectorStore):
             **kwargs: No service-specific keyword arguments are supported.
 
         Returns:
-            Created or accepted memory IDs in request order. Empty input returns
-            an empty list without contacting GoodMem.
+            Created or accepted memory IDs in request order. These are memory
+            IDs, not chunk IDs. Empty input returns an empty list without
+            contacting GoodMem.
 
         Raises:
             ValueError: If input shapes, text values, metadata values, IDs, or
@@ -284,13 +343,18 @@ class GoodMemVectorStore(VectorStore):
         Args:
             query: Non-empty semantic query string.
             k: Maximum number of chunk-level ``Document`` values to return.
-            filter: Optional raw GoodMem filter expression string.
+            filter: Optional GoodMem memory-metadata filter expression string.
+                The expression is passed to GoodMem unchanged and is evaluated
+                before chunk results are returned. Use the documented GoodMem
+                filter language, for example ``val('$.lang') = 'en'`` or
+                ``exists('$.tags[*]')``.
             **kwargs: No additional search keyword arguments are supported.
 
         Returns:
-            Chunk-level ``Document`` values whose metadata includes
-            ``_goodmem_chunk_id``, ``_goodmem_memory_id``, and
-            ``_goodmem_space_id``.
+            Chunk-level ``Document`` values. ``Document.id`` is the GoodMem
+            chunk ID. ``Document.metadata`` includes ``_goodmem_chunk_id``,
+            ``_goodmem_memory_id``, and ``_goodmem_space_id`` so callers can
+            trace the hit back to the parent memory and space.
 
         Raises:
             ValueError: If the query shape, ``k``, filter, or keyword arguments
@@ -317,12 +381,17 @@ class GoodMemVectorStore(VectorStore):
         Args:
             query: Non-empty semantic query string.
             k: Maximum number of scored chunk-level matches to return.
-            filter: Optional raw GoodMem filter expression string.
+            filter: Optional GoodMem memory-metadata filter expression string.
+                The expression is passed to GoodMem unchanged and is evaluated
+                before chunk results are returned. Use the documented GoodMem
+                filter language, for example ``val('$.lang') = 'en'`` or
+                ``exists('$.tags[*]')``.
             **kwargs: No additional search keyword arguments are supported.
 
         Returns:
             Tuples of ``(Document, score)`` where the returned document metadata
-            also includes ``_goodmem_score``.
+            also includes ``_goodmem_score``. ``Document.id`` is still the
+            GoodMem chunk ID rather than the parent memory ID.
 
         Raises:
             ValueError: If the query shape, ``k``, filter, or keyword arguments
@@ -369,13 +438,16 @@ class GoodMemVectorStore(VectorStore):
         """Write texts into an existing GoodMem space and return a bound store.
 
         This compatibility helper matches the LangChain ``VectorStore``
-        convention, but it does not create a new GoodMem space and it does not
-        retain the provided ``embedding`` object on the returned store.
+        convention, but it does not create a new GoodMem space. The provided
+        ``embedding`` argument is accepted only because LangChain expects it in
+        this constructor shape; this package neither uses it for the write nor
+        retains it on the returned store.
 
         Args:
             texts: Texts to write into an existing GoodMem space.
-            embedding: Accepted for LangChain compatibility. The returned store
-                does not retain it.
+            embedding: Accepted for LangChain compatibility only. GoodMem
+                retrieval for this helper still runs on the GoodMem side, so the
+                argument is ignored for both the write and the returned store.
             metadatas: Optional metadata mappings aligned to ``texts``.
             connection: Shared GoodMem transport configuration.
             space_id: Existing GoodMem space identifier.
@@ -386,8 +458,13 @@ class GoodMemVectorStore(VectorStore):
             A vector store bound to the existing GoodMem space after the write.
 
         Raises:
-            ValueError: If the write inputs or keyword arguments fail validation.
-            GoodMemOperationError: If the backend rejects the write.
+            ValueError: If the write inputs or keyword arguments fail
+                validation.
+            GoodMemConfigurationError: If ``space_id`` is blank.
+            GoodMemDuplicateIDError: If duplicate strict-create IDs are
+                supplied or the backend reports duplicate IDs.
+            GoodMemBatchPartialFailureError: If a batch partially succeeds.
+            GoodMemAPIError: If GoodMem rejects the write.
         """
         raise_for_unexpected_kwargs("GoodMemVectorStore.from_texts", kwargs)
         vectorstore = cls(

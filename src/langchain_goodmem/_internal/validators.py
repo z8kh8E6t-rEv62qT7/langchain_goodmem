@@ -29,7 +29,20 @@ def require_non_empty_trimmed_string(
     error_message: str,
     exception_type: type[Exception],
 ) -> str:
-    """Require one strict string input to be present and non-blank."""
+    """Require one strict string input to be present and non-blank.
+
+    Args:
+        value: Candidate string value to validate.
+        error_message: Message used when validation fails.
+        exception_type: Exception class raised for invalid input.
+
+    Returns:
+        The trimmed string value.
+
+    Raises:
+        Exception: An instance of ``exception_type`` when ``value`` is missing,
+            not a string, or blank after trimming.
+    """
     try:
         normalized_value = _STRICT_STRING_ADAPTER.validate_python(value, strict=True)
     except ValidationError as exc:
@@ -42,7 +55,18 @@ def require_non_empty_trimmed_string(
 
 
 def require_verify_value(verify: bool | str) -> bool | str:
-    """Validate the ``verify`` shape accepted by ``GoodMemConnection``."""
+    """Validate the ``verify`` shape accepted by ``GoodMemConnection``.
+
+    Args:
+        verify: TLS verification value supplied by the caller.
+
+    Returns:
+        Either the original boolean value or a validated non-empty string path.
+
+    Raises:
+        GoodMemConfigurationError: If ``verify`` is neither a boolean nor a
+            non-empty string.
+    """
     try:
         validated = _STRICT_BOOL_OR_STRING_ADAPTER.validate_python(verify, strict=True)
     except ValidationError as exc:
@@ -62,7 +86,18 @@ def require_verify_value(verify: bool | str) -> bool | str:
 
 
 def require_space_id(space_id: str) -> str:
-    """Validate one existing-space identifier."""
+    """Validate one existing-space identifier.
+
+    Args:
+        space_id: Existing GoodMem space identifier supplied by the caller.
+
+    Returns:
+        The trimmed GoodMem space identifier.
+
+    Raises:
+        GoodMemConfigurationError: If ``space_id`` is missing, not a string, or
+            blank.
+    """
     return require_non_empty_trimmed_string(
         space_id,
         error_message=(
@@ -73,7 +108,19 @@ def require_space_id(space_id: str) -> str:
 
 
 def require_embedder_id(embedder_id: str) -> str:
-    """Validate one explicit GoodMem embedder identifier."""
+    """Validate one explicit GoodMem embedder identifier.
+
+    Args:
+        embedder_id: Explicit GoodMem embedder identifier supplied by the
+            caller.
+
+    Returns:
+        The trimmed GoodMem embedder identifier.
+
+    Raises:
+        GoodMemConfigurationError: If ``embedder_id`` is missing, not a string,
+            or blank.
+    """
     return require_non_empty_trimmed_string(
         embedder_id,
         error_message=(
@@ -90,7 +137,23 @@ def validate_text_inputs(
     exception_type: type[Exception],
     field_name: str | None = None,
 ) -> list[str]:
-    """Validate one list of text inputs and preserve original ordering."""
+    """Validate one list of text inputs and preserve original ordering.
+
+    Args:
+        texts: Candidate text values to validate.
+        label: Logical collection name used in validation errors.
+        exception_type: Exception class raised when validation fails.
+        field_name: Optional field label appended to error messages for nested
+            sources such as ``Document.page_content``.
+
+    Returns:
+        The validated string values in original order, preserving their
+        original text content.
+
+    Raises:
+        Exception: An instance of ``exception_type`` when any value is not a
+            string or is blank after trimming.
+    """
     validated_texts: list[str] = []
     for index, text in enumerate(texts):
         try:
@@ -123,7 +186,21 @@ def validate_lengths(
     metadatas: list[Any] | None = None,
     ids: list[str | None] | None = None,
 ) -> None:
-    """Validate metadata and ID list lengths against one text/document count."""
+    """Validate metadata and ID list lengths against one text/document count.
+
+    Args:
+        label: Logical collection name used in validation errors.
+        expected_length: Required number of entries.
+        metadatas: Optional metadata list aligned to the source collection.
+        ids: Optional ID list aligned to the source collection.
+
+    Returns:
+        ``None`` when both optional lists match ``expected_length``.
+
+    Raises:
+        ValueError: If either optional list length does not match
+            ``expected_length``.
+    """
     if metadatas is not None and len(metadatas) != expected_length:
         raise ValueError(
             f"The number of metadatas must match the number of {label}. "
@@ -139,7 +216,20 @@ def validate_lengths(
 def normalize_metadatas(
     metadatas: list[Mapping[str, Any] | None] | None,
 ) -> list[dict[str, Any]] | None:
-    """Normalize metadata mappings into plain dictionaries."""
+    """Normalize metadata mappings into plain dictionaries.
+
+    Args:
+        metadatas: Optional metadata values aligned to a write input
+            collection.
+
+    Returns:
+        ``None`` when ``metadatas`` is ``None``; otherwise one plain-dictionary
+        metadata value per input item, with ``None`` entries converted to empty
+        dictionaries.
+
+    Raises:
+        ValueError: If any non-``None`` metadata value is not a mapping.
+    """
     if metadatas is None:
         return None
 
@@ -162,7 +252,18 @@ def normalize_metadatas(
 def normalize_space_embedders(
     embedders: list[GoodMemSpaceEmbedder],
 ) -> list[GoodMemSpaceEmbedder]:
-    """Validate and normalize create-time space-embedder declarations."""
+    """Validate and normalize create-time space-embedder declarations.
+
+    Args:
+        embedders: Candidate create-time GoodMem space-embedder declarations.
+
+    Returns:
+        A validated list of ``GoodMemSpaceEmbedder`` values.
+
+    Raises:
+        GoodMemConfigurationError: If ``embedders`` is empty or contains
+            values other than ``GoodMemSpaceEmbedder`` instances.
+    """
     if not embedders:
         raise GoodMemConfigurationError(
             "GoodMemVectorStore.create requires embedders to be a non-empty list "
@@ -198,7 +299,21 @@ def normalize_optional_ids(
     source: str,
     exception_type: type[Exception],
 ) -> list[str | None] | None:
-    """Normalize one aligned list of optional strict-create memory IDs."""
+    """Normalize one aligned list of optional strict-create memory IDs.
+
+    Args:
+        ids: Optional aligned memory ID list.
+        source: Logical source name used in validation errors.
+        exception_type: Exception class raised when validation fails.
+
+    Returns:
+        ``None`` when ``ids`` is ``None``; otherwise a normalized list whose
+        entries are either ``None`` or non-empty strings.
+
+    Raises:
+        Exception: An instance of ``exception_type`` when any value is neither
+            ``None`` nor a non-empty string.
+    """
     if ids is None:
         return None
 
@@ -214,7 +329,19 @@ def normalize_optional_ids(
 
 
 def validate_duplicate_ids(ids: list[str | None] | None) -> None:
-    """Reject repeated non-``None`` memory IDs in one local write call."""
+    """Reject repeated non-``None`` memory IDs in one local write call.
+
+    Args:
+        ids: Optional aligned memory ID list to inspect.
+
+    Returns:
+        ``None`` when ``ids`` is ``None`` or when all non-``None`` IDs are
+        unique.
+
+    Raises:
+        GoodMemDuplicateIDError: If the same non-``None`` memory ID appears
+            more than once.
+    """
     if ids is None:
         return
 
@@ -241,7 +368,20 @@ def validate_similarity_search_inputs(
     k: int,
     filter_expression: str | None,
 ) -> str:
-    """Validate the public similarity-search input shape."""
+    """Validate the public similarity-search input shape.
+
+    Args:
+        query: Candidate semantic retrieval query text.
+        k: Requested result count.
+        filter_expression: Optional raw GoodMem filter expression string.
+
+    Returns:
+        The validated query string.
+
+    Raises:
+        ValueError: If ``query`` is blank, ``k`` is not a positive integer, or
+            ``filter_expression`` is neither ``None`` nor a string.
+    """
     try:
         validated_query = _STRICT_STRING_ADAPTER.validate_python(query, strict=True)
     except ValidationError as exc:
@@ -270,7 +410,18 @@ def validate_similarity_search_inputs(
 
 
 def raise_for_unexpected_kwargs(operation: str, kwargs: dict[str, Any]) -> None:
-    """Reject service-specific keyword arguments that the package does not support."""
+    """Reject service-specific keyword arguments that the package does not support.
+
+    Args:
+        operation: Operation name used in the error message.
+        kwargs: Keyword arguments provided by the caller.
+
+    Returns:
+        ``None`` when ``kwargs`` is empty.
+
+    Raises:
+        ValueError: If any unsupported keyword arguments are present.
+    """
     if not kwargs:
         return
 

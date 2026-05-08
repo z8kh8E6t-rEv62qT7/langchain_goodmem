@@ -1,5 +1,21 @@
 # Unit Tests
 
+The unit suite is split by package layer so failures stay local and easy to
+interpret.
+
+Suite map:
+
+- `test_connection_unit` checks public connection normalization and environment
+  loading
+- `test_embeddings_unit` isolates `GoodMemEmbeddings` with fake transports and
+  fake upstream providers
+- `test_transport_unit` checks the SDK boundary and error normalization logic
+- `test_vectorstore_unit` covers the main LangChain-facing write and retrieval
+  behavior
+
+If you are debugging a regression, start with the narrowest suite that still
+touches the failing layer before you run the broader matrix.
+
 ```{eval-rst}
 .. automodule:: tests.test_connection_unit
 ```

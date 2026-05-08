@@ -5,6 +5,14 @@ This example shows how to expose a GoodMem-managed embedder as a LangChain
 ``GoodMemVectorStore.create(...)``, and then run both direct embedding and
 semantic retrieval calls.
 
+Choose this workflow when the same GoodMem embedder should serve two roles:
+
+- it should be attached to the newly created GoodMem space
+- it should remain available locally for direct LangChain embedding calls
+
+If you only need server-side retrieval for a new space, the lighter-weight
+``GoodMemSpaceEmbedder`` path is usually simpler.
+
 Prerequisites:
 
 - install the optional embeddings dependency with
@@ -30,7 +38,8 @@ Run the example with:
     ./.venv/bin/python examples/goodmem_embeddings_workflow.py
 
 Search visibility is eventually consistent. A fresh write may need time before
-semantic retrieval returns the new chunk.
+semantic retrieval returns the new chunk, and the returned ``Document.id`` value
+will be the matching chunk ID rather than the parent memory ID.
 """
 
 from __future__ import annotations

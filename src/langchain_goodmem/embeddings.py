@@ -1,8 +1,17 @@
 """LangChain embeddings adapter for GoodMem-managed embedders.
 
-``GoodMemEmbeddings`` exposes a GoodMem embedder as a LangChain
-``Embeddings`` implementation when that embedder is compatible with an
-``OPENAI``-style upstream embeddings endpoint.
+``GoodMemEmbeddings`` turns one existing GoodMem embedder resource into a
+LangChain ``Embeddings`` implementation, but only when that GoodMem embedder is
+compatible with an ``OPENAI``-style upstream embeddings endpoint.
+
+Use this adapter when you need local LangChain embedding calls such as
+``embed_query(...)`` or ``embed_documents(...)``, or when you want
+``GoodMemVectorStore.create(..., embedding=...)`` to both create a space and
+retain a LangChain ``Embeddings`` object on the returned store.
+
+You do not need ``GoodMemEmbeddings`` just to search an existing GoodMem space.
+``GoodMemVectorStore(space_id=..., ...)`` can retrieve directly from GoodMem
+without any local embeddings object.
 
 Credential resolution order:
 
@@ -55,6 +64,10 @@ class GoodMemEmbeddings(Embeddings):
     request, validates that the upstream provider shape is compatible, and then
     delegates to ``langchain_openai.OpenAIEmbeddings``.
 
+    ``embedder_id`` is the identifier of a GoodMem embedder resource, not the
+    raw upstream model name. GoodMem is responsible for storing the provider
+    connection details that this adapter resolves on demand.
+
     Args:
         embedder_id: Explicit GoodMem embedder ID to load on demand.
         connection: Shared GoodMem transport configuration.
@@ -73,7 +86,9 @@ class GoodMemEmbeddings(Embeddings):
         """Embed a list of texts through the resolved upstream provider.
 
         Args:
-            texts: Non-empty text inputs to embed.
+            texts: Non-empty text inputs to embed. These calls do not write any
+                memories into GoodMem; they only use GoodMem as the source of
+                embedder configuration.
 
         Returns:
             A list of embedding vectors. Empty input returns an empty list
@@ -98,7 +113,9 @@ class GoodMemEmbeddings(Embeddings):
         """Embed one query string through the resolved upstream provider.
 
         Args:
-            text: Non-empty query text.
+            text: Non-empty query text. This call does not retrieve from or
+                write to a GoodMem space; it only resolves the configured
+                upstream embedder.
 
         Returns:
             One embedding vector.

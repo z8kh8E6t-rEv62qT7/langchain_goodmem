@@ -9,6 +9,8 @@ Prerequisites:
 - install the package with ``pip install -e .``
 - provide a valid GoodMem API key and base URL
 - create or identify a GoodMem space ahead of time
+- obtain that ``space_id`` from the GoodMem SDK, CLI, or web console, or use
+  ``GoodMemVectorStore.create(...)`` in a separate setup step
 
 Run the example by editing the placeholder connection values and ``space_id``,
 then execute:
@@ -20,8 +22,12 @@ then execute:
 Expected output:
 
 - created memory IDs from ``add_documents(...)``
-- one chunk-level retrieval listing
+- one chunk-level retrieval listing whose ``Document.id`` values are chunk IDs
 - one scored retrieval listing
+
+The filter examples use the documented GoodMem filter language. In particular,
+memory metadata fields are read with expressions such as
+``val('$.lang') = 'en'``.
 
 Search visibility is eventually consistent. Fresh writes may not appear in
 semantic retrieval immediately after the add call returns.
@@ -62,7 +68,7 @@ def main() -> None:
     documents = vectorstore.similarity_search(
         "How does GoodMem work with LangChain?",
         k=2,
-        filter="metadata.lang == 'en'",
+        filter="val('$.lang') = 'en'",
     )
     print("Chunk-level search:")
     for document in documents:
@@ -74,7 +80,7 @@ def main() -> None:
     scored_results = vectorstore.similarity_search_with_score(
         "How does GoodMem work with LangChain?",
         k=2,
-        filter="metadata.lang == 'en'",
+        filter="val('$.lang') = 'en'",
     )
     for document, score in scored_results:
         print("content:", document.page_content)
