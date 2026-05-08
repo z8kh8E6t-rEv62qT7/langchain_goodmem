@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "langchain-goodmem"
+version = "0.1.0"
+description = "LangChain VectorStore and Embeddings integration for GoodMem semantic search."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "goodmem>=0.1.23,<1",
+  "langchain-core>=1,<2",
+  "pydantic>=2,<3",
+]
+
+[project.optional-dependencies]
+openai = [
+  "langchain-openai>=1,<2",
+]
+test = [
+  "langchain-openai>=1,<2",
+  "pytest>=8,<9",
+]
+docs = [
+  "myst-parser>=4,<5",
+  "pytest>=8,<9",
+  "sphinx>=8,<9",
+  "sphinx-autodoc-typehints>=3,<4",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/langchain_goodmem"]
+
+[tool.pytest.ini_options]
+markers = [
+  "integration: live GoodMem integration tests",
+]
+testpaths = ["tests"]
