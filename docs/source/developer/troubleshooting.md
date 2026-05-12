@@ -8,7 +8,9 @@ number of buckets:
   is required for `GoodMemEmbeddings`
 - missing environment variables
   public usage needs `GOODMEM_API_KEY` and `GOODMEM_BASE_URL`; live embeddings
-  coverage may also need the `GOODMEM_EMBEDDINGS_*` variables
+  coverage and `GoodMemEmbeddings.ensure_from_env(...)` may also need
+  `GOODMEM_EMBEDDINGS_*`, and `GOODMEM_EMBEDDER_ID` reuse still requires those
+  bootstrap values to match the selected embedder
 - filter expression mistakes
   GoodMem filters are their own language and operate on memory-level metadata,
   not on chunk-level result objects

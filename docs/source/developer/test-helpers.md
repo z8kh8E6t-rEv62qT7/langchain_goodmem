@@ -8,6 +8,8 @@ It is the best place to look when you need to answer questions like:
 - how reusable versus temporary GoodMem resources are chosen
 - where cleanup happens
 - how the tests wait for eventually consistent retrieval results
+- how compatible embedders are reused or provisioned for live bootstrap and
+  embeddings coverage
 
 One subtle but important rule lives here: `GOODMEM_VERIFY` is interpreted only
 by the live-test helpers, not by `GoodMemConnection.from_env()`.

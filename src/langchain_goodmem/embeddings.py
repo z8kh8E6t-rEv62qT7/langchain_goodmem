@@ -31,6 +31,10 @@ Additional environment support:
 
 - ``GOODMEM_EMBEDDINGS_DIMENSIONS`` remains optional, but when set it must
   match the dimensionality declared on the selected GoodMem embedder
+- ``GOODMEM_EMBEDDINGS_BASE_URL``, ``GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER``, and
+  ``GOODMEM_EMBEDDINGS_DIMENSIONS`` are required by
+  ``GoodMemEmbeddings.ensure_from_env(...)`` even when that helper reuses an
+  existing ``GOODMEM_EMBEDDER_ID``
 
 Common setup failures covered by this module include:
 
@@ -356,6 +360,17 @@ class GoodMemEmbeddings(Embeddings):
 
 
 def _normalize_optional_env_or_value(value: str | None, *, env_name: str) -> str | None:
+    """Return one trimmed explicit value or trimmed environment fallback.
+
+    Args:
+        value: Optional explicit string supplied by the caller.
+        env_name: Environment variable consulted when ``value`` is missing or
+            blank.
+
+    Returns:
+        The trimmed explicit value when present; otherwise the trimmed
+        environment value; otherwise ``None``.
+    """
     if isinstance(value, str) and value.strip():
         return value.strip()
     env_value = os.getenv(env_name)
@@ -365,6 +380,20 @@ def _normalize_optional_env_or_value(value: str | None, *, env_name: str) -> str
 
 
 def _require_env_text(env_name: str, *, error_message: str) -> str:
+    """Load one required non-empty environment value.
+
+    Args:
+        env_name: Environment variable name to read.
+        error_message: Configuration error message raised for missing or blank
+            values.
+
+    Returns:
+        The trimmed environment value.
+
+    Raises:
+        GoodMemConfigurationError: If the environment variable is missing or
+            blank.
+    """
     value = os.getenv(env_name)
     if value is None or not value.strip():
         raise GoodMemConfigurationError(error_message)
@@ -372,6 +401,20 @@ def _require_env_text(env_name: str, *, error_message: str) -> str:
 
 
 def _require_env_int(env_name: str, *, error_message: str) -> int:
+    """Load one required positive integer environment value.
+
+    Args:
+        env_name: Environment variable name to read.
+        error_message: Configuration error message raised for missing, blank,
+            non-integer, or non-positive values.
+
+    Returns:
+        The parsed positive integer value.
+
+    Raises:
+        GoodMemConfigurationError: If the environment variable does not contain
+            a positive integer.
+    """
     value = _require_env_text(env_name, error_message=error_message)
     try:
         parsed = int(value)
@@ -389,6 +432,18 @@ def _validate_bootstrap_env_matches_embedder(
     model_identifier: str,
     dimensionality: int,
 ) -> None:
+    """Require bootstrap environment values to match a reused embedder.
+
+    Args:
+        embedder: Resolved embedder selected through ``GOODMEM_EMBEDDER_ID``.
+        endpoint_url: Required bootstrap endpoint URL from environment.
+        model_identifier: Required bootstrap model identifier from environment.
+        dimensionality: Required bootstrap dimensionality from environment.
+
+    Raises:
+        GoodMemConfigurationError: If the reused embedder does not exactly
+            match the declared bootstrap environment values.
+    """
     if embedder.endpoint_url != endpoint_url:
         raise GoodMemConfigurationError(
             "GoodMemEmbeddings.ensure_from_env() found that GOODMEM_EMBEDDER_ID "

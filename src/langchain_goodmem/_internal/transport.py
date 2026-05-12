@@ -6,6 +6,8 @@ Responsibilities:
 
 - construct the SDK client from ``GoodMemConnection``
 - map package-owned request shapes onto SDK request objects
+- expose the narrow embedder list/get/create calls needed by the bootstrap
+  embeddings path
 - normalize SDK-specific exceptions into package-owned errors
 - preserve consumer exceptions when retrieval streams are consumed lazily
 """

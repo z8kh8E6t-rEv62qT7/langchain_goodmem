@@ -7,7 +7,13 @@ Responsibilities:
 - normalize the GoodMem embedder response into ``GoodMemEmbedderConfig``
 - validate that the selected embedder can back an ``OPENAI``-compatible
   LangChain embeddings adapter
+- normalize and validate bootstrap requests used by
+  ``GoodMemEmbeddings.ensure(...)``
+- find compatible existing embedders before create-once bootstrap falls back to
+  provisioning a new one
 - resolve credentials and optional dimensions overrides
+- verify that bootstrap-resolved embedders are immediately usable by the
+  current embeddings path
 - build the upstream provider ``Embeddings`` implementation lazily
 """
 
@@ -65,6 +71,8 @@ def create_provider_embeddings(
 
     Args:
         embedder: Normalized GoodMem embedder configuration.
+        upstream_api_key_override: Optional explicit upstream API key that
+            takes precedence over inline or environment-based resolution.
 
     Returns:
         An ``Embeddings`` implementation backed by
@@ -115,10 +123,14 @@ def ensure_embedder(
         transport: Transport implementation exposing embedder bootstrap
             operations.
         request: Normalized bootstrap request describing the target embedder.
+        upstream_api_key_override: Optional explicit upstream API key used
+            during readiness validation when the resolved embedder does not
+            expose a readable inline secret.
 
     Returns:
         The validated embedder configuration that satisfies
-        ``GoodMemEmbeddings`` requirements.
+        ``GoodMemEmbeddings`` requirements. Existing matches are revalidated
+        for compatibility and readiness before they are reused.
 
     Raises:
         GoodMemConfigurationError: If the bootstrap request is invalid, if more
@@ -311,6 +323,8 @@ def resolve_upstream_api_key(
 
     Args:
         embedder: Normalized GoodMem embedder configuration.
+        upstream_api_key_override: Optional explicit upstream API key that
+            takes precedence over inline or environment-based resolution.
 
     Returns:
         The API key that should be forwarded to the upstream embeddings

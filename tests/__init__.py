@@ -32,9 +32,9 @@ Coverage focus:
 
 - ``GoodMemConnection.from_env()``
 - vector-store create, write, and chunk-search flows
-- embeddings configuration, upstream credential resolution, and create-time
-  integration behavior
+- embeddings configuration, upstream credential resolution, bootstrap behavior,
+  and create-time integration behavior
 - transport error normalization
 - one live existing-space path, one live create-helper path, and one live
-  embeddings-driven path
+  embeddings bootstrap plus embeddings-driven path
 """

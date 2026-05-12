@@ -10,6 +10,8 @@ LangChain wrapper around a subset of GoodMem:
 - it retrieves chunk-level semantic matches from that space
 - it optionally exposes a GoodMem-managed embedder as a LangChain
   `Embeddings` object
+- it can now bootstrap one compatible embedder for that embeddings workflow
+  without becoming a full GoodMem resource-management layer
 
 If you only remember one distinction, remember this one:
 

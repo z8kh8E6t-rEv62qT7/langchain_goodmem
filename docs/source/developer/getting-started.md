@@ -13,6 +13,8 @@ The package is intentionally narrow:
 - it exposes GoodMem spaces as LangChain-facing vector-store workflows
 - it exposes one compatible class of GoodMem-managed embedders as LangChain
   `Embeddings`
+- it now includes one narrow bootstrap path that can find or create a single
+  compatible embedder for the `GoodMemEmbeddings` workflow
 - it keeps validation, transport mapping, and error normalization inside
   package-owned layers so behavior stays explicit and testable
 
@@ -33,6 +35,9 @@ layers:
 - an `embedder` is a GoodMem-managed embedding configuration that can be
   attached to a space and, in some cases, exposed locally as LangChain
   `Embeddings`
+- the bootstrap helpers still do not make this repository a general GoodMem
+  resource CRUD layer; they exist only to close the clean-slate onboarding gap
+  for one `OPENAI`-compatible embeddings path
 - metadata filters apply to memory-level JSON metadata through the GoodMem
   filter language, not to chunk-level LangChain result objects
 - search is eventually consistent because writes need to be processed into
@@ -170,6 +175,9 @@ If you are changing embeddings behavior:
 
 - start with `src/langchain_goodmem/embeddings.py`
 - then review `src/langchain_goodmem/_internal/providers.py`
+- then review `src/langchain_goodmem/_internal/types.py` and
+  `src/langchain_goodmem/_internal/transport.py` if the change touches
+  bootstrap matching, creation, or SDK mapping
 - verify with `tests/test_embeddings_unit.py`
 
 If you are changing transport mapping or SDK exception handling:

@@ -15,8 +15,8 @@ Pay special attention to:
 - `GoodMemWriteRequest` for normalized write inputs
 - `GoodMemSearchHit` for the chunk-level shape that eventually becomes a
   LangChain `Document`
-- `GoodMemSpaceCreateRequest` and `GoodMemEmbedderConfig` for the create-space
-  and embeddings paths
+- `GoodMemSpaceCreateRequest`, `GoodMemEmbedderBootstrapRequest`, and
+  `GoodMemEmbedderConfig` for the create-space, bootstrap, and embeddings paths
 - the transport protocols for the smallest callable surface each upper layer
   actually needs
 

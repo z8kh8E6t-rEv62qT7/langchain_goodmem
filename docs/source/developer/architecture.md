@@ -21,6 +21,17 @@ Read the codebase from top to bottom in this order:
 That split is what lets the repository test most edge cases without requiring a
 live GoodMem deployment for every change.
 
+The embeddings bootstrap path follows the same layering rule:
+
+- `embeddings.py` owns the public `GoodMemEmbeddings.ensure(...)` and
+  `ensure_from_env(...)` entry points
+- `_internal.providers` owns bootstrap matching, request normalization, and
+  readiness checks
+- `_internal.transport` owns the minimal SDK calls needed to list, get, and
+  create embedders
+- `_internal.types` owns the package-local bootstrap request and the narrow
+  transport protocols used by upper layers
+
 ```{eval-rst}
 .. automodule:: langchain_goodmem._internal.memory_ops
    :members:
