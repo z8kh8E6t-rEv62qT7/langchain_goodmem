@@ -18,7 +18,11 @@ from typing import Any
 
 from ..connection import GoodMemConnection
 from ..errors import GoodMemAPIError, GoodMemConfigurationError, GoodMemDuplicateIDError
-from .types import GoodMemSpaceCreateRequest, GoodMemWriteRequest
+from .types import (
+    GoodMemEmbedderBootstrapRequest,
+    GoodMemSpaceCreateRequest,
+    GoodMemWriteRequest,
+)
 
 _SDK_ERROR_DETAIL_LIMIT = 500
 
@@ -217,6 +221,66 @@ class GoodMemTransport:
         """
         try:
             return self._client.embedders.get(id=embedder_id)
+        except self._api_error_type as exc:
+            raise _normalize_sdk_api_error(exc) from exc
+        except self._goodmem_error_type as exc:
+            raise GoodMemAPIError(_describe_generic_backend_failure(exc)) from exc
+        except Exception as exc:  # pragma: no cover - defensive SDK guard
+            raise GoodMemAPIError(_describe_generic_backend_failure(exc)) from exc
+
+    def list_embedders(self) -> Any:
+        """List GoodMem embedders visible to the current client.
+
+        Returns:
+            The raw GoodMem SDK embedder listing response.
+
+        Raises:
+            GoodMemAPIError: If GoodMem rejects the listing or any other
+                backend failure occurs.
+        """
+        try:
+            return self._client.embedders.list()
+        except self._api_error_type as exc:
+            raise _normalize_sdk_api_error(exc) from exc
+        except self._goodmem_error_type as exc:
+            raise GoodMemAPIError(_describe_generic_backend_failure(exc)) from exc
+        except Exception as exc:  # pragma: no cover - defensive SDK guard
+            raise GoodMemAPIError(_describe_generic_backend_failure(exc)) from exc
+
+    def create_embedder(self, request: GoodMemEmbedderBootstrapRequest) -> Any:
+        """Create one GoodMem embedder from a normalized bootstrap request.
+
+        Args:
+            request: Package-owned bootstrap request describing the embedder to
+                create.
+
+        Returns:
+            The raw GoodMem SDK response object for the created embedder.
+
+        Raises:
+            GoodMemDuplicateIDError: If GoodMem reports that the embedder
+                already exists.
+            GoodMemAPIError: If the SDK rejects the request or raises any other
+                backend failure.
+        """
+        from goodmem.types import Modality, ProviderType
+
+        try:
+            return self._client.embedders.create(
+                display_name=request.display_name,
+                endpoint_url=request.endpoint_url,
+                model_identifier=request.model_identifier,
+                dimensionality=request.dimensionality,
+                provider_type=ProviderType(request.provider_type),
+                supported_modalities=[
+                    Modality(modality) for modality in request.supported_modalities
+                ],
+                api_key=request.api_key,
+            )
+        except self._conflict_error_type as exc:
+            raise GoodMemDuplicateIDError(
+                "GoodMem reported that the requested embedder already exists."
+            ) from exc
         except self._api_error_type as exc:
             raise _normalize_sdk_api_error(exc) from exc
         except self._goodmem_error_type as exc:

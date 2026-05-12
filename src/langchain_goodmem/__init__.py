@@ -50,6 +50,20 @@ Choose a store-binding flow:
 - if you need the package to create a new space for you, use
   ``GoodMemVectorStore.create(...)``
 
+Choose an embeddings flow:
+
+- if you already have one compatible GoodMem embedder ID, construct
+  ``GoodMemEmbeddings(embedder_id=..., ...)`` directly
+- if you are starting from a clean slate and need the package to find or
+  create one compatible ``OPENAI``-style embedder first, use
+  ``GoodMemEmbeddings.ensure(...)`` or ``GoodMemEmbeddings.ensure_from_env()``
+  and, when reusing ``GOODMEM_EMBEDDER_ID`` through the environment helper,
+  keep the bootstrap environment present and aligned with that embedder
+
+Those bootstrap helpers are intentionally narrow. They close the package's
+clean-slate onboarding gap for embeddings without expanding the repository into
+a general GoodMem resource-management API.
+
 Minimal existing-space add-and-search flow:
 
 ::
@@ -80,6 +94,8 @@ memories before they become searchable.
 For fuller workflows:
 
 - see ``examples/basic_semantic_search.py`` for existing-space usage
+- see ``examples/goodmem_embeddings_bootstrap_workflow.py`` for clean-slate
+  embeddings bootstrap usage
 - see ``GoodMemVectorStore.create`` for create-helper usage
 - see ``examples/goodmem_embeddings_workflow.py`` for embeddings-driven usage
 """

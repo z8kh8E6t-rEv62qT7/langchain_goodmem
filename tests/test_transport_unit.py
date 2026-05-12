@@ -32,7 +32,10 @@ from langchain_goodmem import (
     GoodMemDuplicateIDError,
     GoodMemSpaceEmbedder,
 )
-from langchain_goodmem._internal.types import GoodMemSpaceCreateRequest
+from langchain_goodmem._internal.types import (
+    GoodMemEmbedderBootstrapRequest,
+    GoodMemSpaceCreateRequest,
+)
 from langchain_goodmem._internal.transport import (
     GoodMemTransport,
     _describe_generic_backend_failure,
@@ -115,9 +118,11 @@ class FakeClient:
         self,
         memories: FakeMemoriesClient,
         spaces: FakeSpacesClient | None = None,
+        embedders: object | None = None,
     ) -> None:
         self.memories = memories
         self.spaces = spaces or FakeSpacesClient()
+        self.embedders = embedders or FakeEmbeddersClient(object())
 
 
 def _make_transport(
@@ -160,14 +165,30 @@ class ErroringEmbeddersClient:
     def get(self, **kwargs: Any) -> Any:
         raise self.exc
 
+    def list(self, **kwargs: Any) -> Any:
+        raise self.exc
+
+    def create(self, **kwargs: Any) -> Any:
+        raise self.exc
+
 
 class FakeEmbeddersClient:
     def __init__(self, response: Any) -> None:
         self.response = response
         self.calls: list[dict[str, Any]] = []
+        self.list_calls: int = 0
+        self.create_calls: list[dict[str, Any]] = []
 
     def get(self, **kwargs: Any) -> Any:
         self.calls.append(kwargs)
+        return self.response
+
+    def list(self, **kwargs: Any) -> Any:
+        self.list_calls += 1
+        return [self.response]
+
+    def create(self, **kwargs: Any) -> Any:
+        self.create_calls.append(kwargs)
         return self.response
 
 
@@ -624,6 +645,52 @@ def test_get_embedder_successfully_returns_sdk_response() -> None:
     assert embedders.calls == [{"id": "embedder-123"}]
 
 
+def test_list_embedders_successfully_returns_sdk_response() -> None:
+    response = object()
+    embedders = FakeEmbeddersClient(response)
+    transport = GoodMemTransport.__new__(GoodMemTransport)
+    transport._api_error_type = APIError
+    transport._conflict_error_type = ConflictError
+    transport._goodmem_error_type = GoodMemError
+    transport._client = SimpleNamespace(embedders=embedders)
+
+    assert transport.list_embedders() == [response]
+    assert embedders.list_calls == 1
+
+
+def test_create_embedder_maps_bootstrap_request_to_sdk_types() -> None:
+    response = object()
+    embedders = FakeEmbeddersClient(response)
+    transport = GoodMemTransport.__new__(GoodMemTransport)
+    transport._api_error_type = APIError
+    transport._conflict_error_type = ConflictError
+    transport._goodmem_error_type = GoodMemError
+    transport._client = SimpleNamespace(embedders=embedders)
+
+    result = transport.create_embedder(
+        GoodMemEmbedderBootstrapRequest(
+            display_name="langchain-goodmem-openai",
+            endpoint_url="https://embeddings.example",
+            model_identifier="text-embedding-3-large",
+            dimensionality=1024,
+            api_key="upstream-key",
+        )
+    )
+
+    assert result is response
+    assert len(embedders.create_calls) == 1
+    create_call = embedders.create_calls[0]
+    assert create_call["display_name"] == "langchain-goodmem-openai"
+    assert create_call["endpoint_url"] == "https://embeddings.example"
+    assert create_call["model_identifier"] == "text-embedding-3-large"
+    assert create_call["dimensionality"] == 1024
+    assert getattr(create_call["provider_type"], "value", create_call["provider_type"]) == "OPENAI"
+    supported_modalities = create_call["supported_modalities"]
+    assert len(supported_modalities) == 1
+    assert getattr(supported_modalities[0], "value", supported_modalities[0]) == "TEXT"
+    assert create_call["api_key"] == "upstream-key"
+
+
 def test_get_embedder_normalizes_generic_failures_without_message() -> None:
     transport = GoodMemTransport.__new__(GoodMemTransport)
     transport._api_error_type = APIError
@@ -633,6 +700,66 @@ def test_get_embedder_normalizes_generic_failures_without_message() -> None:
 
     with pytest.raises(GoodMemAPIError, match="GoodMem request failed\\.$"):
         transport.get_embedder(embedder_id="embedder-123")
+
+
+@pytest.mark.parametrize(
+    ("method_name", "call", "expected_type", "match"),
+    [
+        (
+            "list_embedders",
+            lambda transport: transport.list_embedders(),
+            GoodMemAPIError,
+            "status 404: missing",
+        ),
+        (
+            "create_embedder",
+            lambda transport: transport.create_embedder(
+                GoodMemEmbedderBootstrapRequest(
+                    display_name="langchain-goodmem-openai",
+                    endpoint_url="https://embeddings.example",
+                    model_identifier="text-embedding-3-large",
+                    dimensionality=1024,
+                )
+            ),
+            GoodMemAPIError,
+            "status 404: missing",
+        ),
+    ],
+)
+def test_bootstrap_embedder_transport_normalizes_backend_failures(
+    method_name: str,
+    call: Any,
+    expected_type: type[Exception],
+    match: str,
+) -> None:
+    exc = APIError("HTTP 404: missing", status_code=404, body="missing")
+    transport = GoodMemTransport.__new__(GoodMemTransport)
+    transport._api_error_type = APIError
+    transport._conflict_error_type = ConflictError
+    transport._goodmem_error_type = GoodMemError
+    transport._client = SimpleNamespace(embedders=ErroringEmbeddersClient(exc))
+
+    with pytest.raises(expected_type, match=match):
+        call(transport)
+
+
+def test_create_embedder_maps_conflict_to_duplicate_error() -> None:
+    exc = ConflictError("already exists", status_code=409, body="already exists")
+    transport = GoodMemTransport.__new__(GoodMemTransport)
+    transport._api_error_type = APIError
+    transport._conflict_error_type = ConflictError
+    transport._goodmem_error_type = GoodMemError
+    transport._client = SimpleNamespace(embedders=ErroringEmbeddersClient(exc))
+
+    with pytest.raises(GoodMemDuplicateIDError, match="requested embedder already exists"):
+        transport.create_embedder(
+            GoodMemEmbedderBootstrapRequest(
+                display_name="langchain-goodmem-openai",
+                endpoint_url="https://embeddings.example",
+                model_identifier="text-embedding-3-large",
+                dimensionality=1024,
+            )
+        )
 
 
 def test_normalize_sdk_api_error_handles_empty_message_without_status() -> None:

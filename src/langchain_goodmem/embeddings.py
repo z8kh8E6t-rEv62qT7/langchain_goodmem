@@ -18,6 +18,15 @@ Credential resolution order:
 1. readable inline API key stored on the GoodMem embedder
 2. ``GOODMEM_EMBEDDINGS_API_KEY``
 
+For clean-slate onboarding, ``GoodMemEmbeddings.ensure(...)`` and
+``GoodMemEmbeddings.ensure_from_env(...)`` can find or create one compatible
+GoodMem embedder before returning a normal ``GoodMemEmbeddings`` instance.
+``ensure_from_env(...)`` also supports ``GOODMEM_EMBEDDER_ID`` reuse, but when
+that path is used the bootstrap environment must still be present and must
+match the selected embedder so configuration drift stays explicit. These
+helpers are intentionally narrow bootstrap conveniences rather than a general
+GoodMem resource-management API.
+
 Additional environment support:
 
 - ``GOODMEM_EMBEDDINGS_DIMENSIONS`` remains optional, but when set it must
@@ -35,17 +44,20 @@ Common setup failures covered by this module include:
 from __future__ import annotations
 
 from collections.abc import Callable
+import os
 from typing import TypeVar
 
 from langchain_core.embeddings import Embeddings
 
 from ._internal.providers import (
     create_provider_embeddings,
+    default_bootstrap_display_name,
+    ensure_embedder,
     format_provider_failure_message,
     load_embedder_config,
 )
 from ._internal.transport import GoodMemTransport
-from ._internal.types import GoodMemEmbedderConfig
+from ._internal.types import GoodMemEmbedderBootstrapRequest, GoodMemEmbedderConfig
 from ._internal.validators import require_embedder_id, validate_text_inputs
 from .connection import GoodMemConnection
 from .errors import GoodMemAPIError, GoodMemConfigurationError
@@ -81,6 +93,155 @@ class GoodMemEmbeddings(Embeddings):
         self._transport = _create_transport(connection)
         self._embedder_config: GoodMemEmbedderConfig | None = None
         self._provider_embeddings: Embeddings | None = None
+
+    @classmethod
+    def ensure(
+        cls,
+        *,
+        connection: GoodMemConnection,
+        endpoint_url: str,
+        model_identifier: str,
+        dimensionality: int,
+        upstream_api_key: str | None = None,
+        display_name: str | None = None,
+    ) -> "GoodMemEmbeddings":
+        """Find or create one compatible GoodMem embedder and return it.
+
+        This helper keeps the package's narrow LangChain scope intact while
+        still supporting clean-slate onboarding. It does not expose general
+        GoodMem resource CRUD; it only resolves one ``OPENAI``-compatible
+        embedder that can back ``GoodMemEmbeddings``.
+
+        Args:
+            connection: Shared GoodMem transport configuration.
+            endpoint_url: Upstream provider endpoint URL.
+            model_identifier: Upstream embedding model identifier.
+            dimensionality: Required embedding dimensionality.
+            upstream_api_key: Optional upstream API key stored on a newly
+                created embedder. When omitted, the helper falls back to
+                ``GOODMEM_EMBEDDINGS_API_KEY`` for creation.
+            display_name: Optional display name used only when a new embedder
+                must be created.
+
+        Returns:
+            A ready-to-use ``GoodMemEmbeddings`` instance bound to the matched
+            or created GoodMem embedder.
+
+        Raises:
+            GoodMemConfigurationError: If the bootstrap inputs are invalid, if
+                multiple compatible embedders are found, or if the resolved
+                embedder is incompatible with ``GoodMemEmbeddings``.
+            GoodMemAPIError: If GoodMem rejects the bootstrap lookup or create
+                operations.
+        """
+        transport = _create_transport(connection)
+        resolved_api_key = _normalize_optional_env_or_value(
+            upstream_api_key,
+            env_name="GOODMEM_EMBEDDINGS_API_KEY",
+        )
+        resolved_config = ensure_embedder(
+            transport,
+            request=GoodMemEmbedderBootstrapRequest(
+                display_name=display_name or default_bootstrap_display_name(),
+                endpoint_url=endpoint_url,
+                model_identifier=model_identifier,
+                dimensionality=dimensionality,
+                api_key=resolved_api_key,
+            ),
+            upstream_api_key_override=resolved_api_key,
+        )
+        embeddings = cls(embedder_id=resolved_config.embedder_id, connection=connection)
+        embeddings._embedder_config = resolved_config
+        embeddings._provider_embeddings = create_provider_embeddings(
+            resolved_config,
+            upstream_api_key_override=resolved_api_key,
+        )
+        return embeddings
+
+    @classmethod
+    def ensure_from_env(
+        cls,
+        *,
+        connection: GoodMemConnection | None = None,
+        verify: bool | str = True,
+    ) -> "GoodMemEmbeddings":
+        """Build one bootstrap-backed embeddings adapter from environment.
+
+        This helper reuses the current ``GOODMEM_EMBEDDINGS_*`` contract to
+        resolve one compatible embedder without introducing a larger resource
+        management surface. When ``GOODMEM_EMBEDDER_ID`` is set, the helper
+        reuses that embedder only after confirming the bootstrap environment
+        still matches the embedder's endpoint, model, and dimensionality.
+
+        Args:
+            connection: Optional explicit GoodMem connection. When omitted, the
+                helper uses ``GoodMemConnection.from_env()``.
+            verify: TLS verification setting used only when ``connection`` is
+                omitted and a new connection must be built from environment.
+
+        Returns:
+            A ready-to-use ``GoodMemEmbeddings`` instance bound to the matched
+            or created GoodMem embedder.
+
+        Raises:
+            GoodMemConfigurationError: If required bootstrap environment values
+                are missing or invalid.
+            GoodMemAPIError: If GoodMem rejects the bootstrap lookup or create
+                operations.
+        """
+        resolved_connection = connection or GoodMemConnection.from_env(verify=verify)
+        embedder_id = _normalize_optional_env_or_value(
+            None,
+            env_name="GOODMEM_EMBEDDER_ID",
+        )
+        endpoint_url = _require_env_text(
+            "GOODMEM_EMBEDDINGS_BASE_URL",
+            error_message=(
+                "GoodMemEmbeddings.ensure_from_env() requires "
+                "GOODMEM_EMBEDDINGS_BASE_URL."
+            ),
+        )
+        model_identifier = _require_env_text(
+            "GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER",
+            error_message=(
+                "GoodMemEmbeddings.ensure_from_env() requires "
+                "GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER."
+            ),
+        )
+        dimensionality = _require_env_int(
+            "GOODMEM_EMBEDDINGS_DIMENSIONS",
+            error_message=(
+                "GoodMemEmbeddings.ensure_from_env() requires "
+                "GOODMEM_EMBEDDINGS_DIMENSIONS to be a positive integer."
+            ),
+        )
+        if embedder_id is not None:
+            resolved_embedder = load_embedder_config(
+                _create_transport(resolved_connection),
+                embedder_id=embedder_id,
+            )
+            _validate_bootstrap_env_matches_embedder(
+                resolved_embedder,
+                endpoint_url=endpoint_url,
+                model_identifier=model_identifier,
+                dimensionality=dimensionality,
+            )
+            embeddings = cls(
+                embedder_id=resolved_embedder.embedder_id,
+                connection=resolved_connection,
+            )
+            embeddings._embedder_config = resolved_embedder
+            return embeddings
+        return cls.ensure(
+            connection=resolved_connection,
+            endpoint_url=endpoint_url,
+            model_identifier=model_identifier,
+            dimensionality=dimensionality,
+            upstream_api_key=_normalize_optional_env_or_value(
+                None,
+                env_name="GOODMEM_EMBEDDINGS_API_KEY",
+            ),
+        )
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         """Embed a list of texts through the resolved upstream provider.
@@ -192,3 +353,54 @@ class GoodMemEmbeddings(Embeddings):
                 self._get_embedder_config(),
             )
         return self._provider_embeddings
+
+
+def _normalize_optional_env_or_value(value: str | None, *, env_name: str) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    env_value = os.getenv(env_name)
+    if isinstance(env_value, str) and env_value.strip():
+        return env_value.strip()
+    return None
+
+
+def _require_env_text(env_name: str, *, error_message: str) -> str:
+    value = os.getenv(env_name)
+    if value is None or not value.strip():
+        raise GoodMemConfigurationError(error_message)
+    return value.strip()
+
+
+def _require_env_int(env_name: str, *, error_message: str) -> int:
+    value = _require_env_text(env_name, error_message=error_message)
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise GoodMemConfigurationError(error_message) from exc
+    if parsed <= 0:
+        raise GoodMemConfigurationError(error_message)
+    return parsed
+
+
+def _validate_bootstrap_env_matches_embedder(
+    embedder: GoodMemEmbedderConfig,
+    *,
+    endpoint_url: str,
+    model_identifier: str,
+    dimensionality: int,
+) -> None:
+    if embedder.endpoint_url != endpoint_url:
+        raise GoodMemConfigurationError(
+            "GoodMemEmbeddings.ensure_from_env() found that GOODMEM_EMBEDDER_ID "
+            "does not match GOODMEM_EMBEDDINGS_BASE_URL."
+        )
+    if embedder.model_identifier != model_identifier:
+        raise GoodMemConfigurationError(
+            "GoodMemEmbeddings.ensure_from_env() found that GOODMEM_EMBEDDER_ID "
+            "does not match GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER."
+        )
+    if embedder.dimensionality != dimensionality:
+        raise GoodMemConfigurationError(
+            "GoodMemEmbeddings.ensure_from_env() found that GOODMEM_EMBEDDER_ID "
+            "does not match GOODMEM_EMBEDDINGS_DIMENSIONS."
+        )

@@ -20,11 +20,16 @@ from typing import Any
 from langchain_core.embeddings import Embeddings
 
 from ..errors import GoodMemAPIError, GoodMemConfigurationError
-from .types import GoodMemEmbedderConfig, SupportsEmbedderTransport
+from .types import (
+    GoodMemEmbedderBootstrapRequest,
+    GoodMemEmbedderConfig,
+    SupportsEmbedderTransport,
+)
 
 _OPENAI_EXTRA_INSTALL_HINT = (
     "Install it with `pip install langchain-goodmem[openai]`."
 )
+_DEFAULT_BOOTSTRAP_DISPLAY_NAME = "langchain-goodmem-openai"
 
 
 def load_embedder_config(
@@ -53,6 +58,8 @@ def load_embedder_config(
 
 def create_provider_embeddings(
     embedder: GoodMemEmbedderConfig,
+    *,
+    upstream_api_key_override: str | None = None,
 ) -> Embeddings:
     """Build the upstream LangChain embeddings provider for one embedder.
 
@@ -69,7 +76,10 @@ def create_provider_embeddings(
         GoodMemAPIError: If provider initialization fails.
     """
     openai_embeddings_cls = _load_openai_embeddings_class()
-    upstream_api_key = resolve_upstream_api_key(embedder)
+    upstream_api_key = resolve_upstream_api_key(
+        embedder,
+        upstream_api_key_override=upstream_api_key_override,
+    )
     dimensions = resolve_upstream_dimensions(embedder)
     provider_kwargs: dict[str, Any] = {
         "api_key": upstream_api_key,
@@ -93,6 +103,188 @@ def create_provider_embeddings(
         ) from exc
 
 
+def ensure_embedder(
+    transport: SupportsEmbedderTransport,
+    *,
+    request: GoodMemEmbedderBootstrapRequest,
+    upstream_api_key_override: str | None = None,
+) -> GoodMemEmbedderConfig:
+    """Find or create one compatible embedder and verify it is usable.
+
+    Args:
+        transport: Transport implementation exposing embedder bootstrap
+            operations.
+        request: Normalized bootstrap request describing the target embedder.
+
+    Returns:
+        The validated embedder configuration that satisfies
+        ``GoodMemEmbeddings`` requirements.
+
+    Raises:
+        GoodMemConfigurationError: If the bootstrap request is invalid, if more
+            than one compatible embedder exists, or if the resolved embedder is
+            unusable.
+        GoodMemAPIError: If GoodMem list, create, or get operations fail.
+    """
+    validated_request = validate_bootstrap_request(request)
+    matches = find_matching_embedders(
+        transport,
+        request=validated_request,
+    )
+    if len(matches) > 1:
+        raise GoodMemConfigurationError(
+            "GoodMemEmbeddings.ensure found multiple compatible embedders. "
+            "Narrow the bootstrap inputs so one embedder matches the requested "
+            "provider_type, endpoint_url, model_identifier, and dimensionality."
+        )
+
+    if matches:
+        resolved = matches[0]
+    else:
+        created = transport.create_embedder(validated_request)
+        resolved = _to_embedder_config(created)
+
+    validate_compatible_embedder_config(resolved)
+    resolve_upstream_api_key(
+        resolved,
+        upstream_api_key_override=upstream_api_key_override,
+    )
+    return resolved
+
+
+def default_bootstrap_display_name() -> str:
+    """Return the fixed default display name for bootstrap-created embedders."""
+    return _DEFAULT_BOOTSTRAP_DISPLAY_NAME
+
+
+def validate_bootstrap_request(
+    request: GoodMemEmbedderBootstrapRequest,
+) -> GoodMemEmbedderBootstrapRequest:
+    """Validate and normalize one bootstrap request.
+
+    Args:
+        request: Candidate bootstrap request supplied by the public entry
+            point.
+
+    Returns:
+        A normalized bootstrap request.
+
+    Raises:
+        GoodMemConfigurationError: If any field is unsupported, blank, or
+            invalid for the current ``GoodMemEmbeddings`` bootstrap flow.
+    """
+    provider_type = _normalize_required_text(
+        request.provider_type,
+        error_message=(
+            "GoodMemEmbeddings.ensure requires provider_type to be OPENAI."
+        ),
+    ).upper()
+    if provider_type != "OPENAI":
+        raise GoodMemConfigurationError(
+            "GoodMemEmbeddings.ensure currently supports only OPENAI provider_type."
+        )
+
+    supported_modalities = tuple(
+        _normalize_required_text(
+            modality,
+            error_message=(
+                "GoodMemEmbeddings.ensure requires supported_modalities to contain "
+                "non-empty strings."
+            ),
+        ).upper()
+        for modality in request.supported_modalities
+    )
+    if not supported_modalities:
+        raise GoodMemConfigurationError(
+            "GoodMemEmbeddings.ensure requires supported_modalities to be non-empty."
+        )
+    if "TEXT" not in supported_modalities:
+        raise GoodMemConfigurationError(
+            "GoodMemEmbeddings.ensure requires supported_modalities to include TEXT."
+        )
+
+    try:
+        dimensionality = int(request.dimensionality)
+    except (TypeError, ValueError) as exc:
+        raise GoodMemConfigurationError(
+            "GoodMemEmbeddings.ensure requires dimensionality to be a positive integer."
+        ) from exc
+    if dimensionality <= 0:
+        raise GoodMemConfigurationError(
+            "GoodMemEmbeddings.ensure requires dimensionality to be a positive integer."
+        )
+
+    return GoodMemEmbedderBootstrapRequest(
+        display_name=_normalize_required_text(
+            request.display_name,
+            error_message=(
+                "GoodMemEmbeddings.ensure requires display_name to be a non-empty string."
+            ),
+        ),
+        endpoint_url=_normalize_required_text(
+            request.endpoint_url,
+            error_message=(
+                "GoodMemEmbeddings.ensure requires endpoint_url to be a non-empty string."
+            ),
+        ),
+        model_identifier=_normalize_required_text(
+            request.model_identifier,
+            error_message=(
+                "GoodMemEmbeddings.ensure requires model_identifier to be a non-empty string."
+            ),
+        ),
+        dimensionality=dimensionality,
+        provider_type=provider_type,
+        supported_modalities=supported_modalities,
+        api_key=_normalize_optional_text(request.api_key),
+    )
+
+
+def find_matching_embedders(
+    transport: SupportsEmbedderTransport,
+    *,
+    request: GoodMemEmbedderBootstrapRequest,
+) -> list[GoodMemEmbedderConfig]:
+    """Return compatible embedders visible to the current client.
+
+    Args:
+        transport: Transport implementation exposing embedder listing.
+        request: Normalized bootstrap request describing the desired embedder.
+
+    Returns:
+        Compatible embedder configurations in transport-provided order.
+    """
+    matches: list[GoodMemEmbedderConfig] = []
+    for raw_embedder in transport.list_embedders():
+        config = _to_embedder_config(raw_embedder)
+        if not embedder_matches_bootstrap_request(config, request=request):
+            continue
+        try:
+            validate_compatible_embedder_config(config)
+        except GoodMemConfigurationError:
+            continue
+        matches.append(config)
+    return matches
+
+
+def embedder_matches_bootstrap_request(
+    embedder: GoodMemEmbedderConfig,
+    *,
+    request: GoodMemEmbedderBootstrapRequest,
+) -> bool:
+    """Check whether one embedder satisfies the requested bootstrap target."""
+    if embedder.provider_type != request.provider_type:
+        return False
+    if embedder.endpoint_url != request.endpoint_url:
+        return False
+    if embedder.model_identifier != request.model_identifier:
+        return False
+    if embedder.dimensionality != request.dimensionality:
+        return False
+    embedder_modalities = {modality.upper() for modality in embedder.supported_modalities}
+    return set(request.supported_modalities).issubset(embedder_modalities)
+
+
 def format_provider_failure_message(prefix: str, exc: Exception) -> str:
     """Format one provider failure message with bounded detail text.
 
@@ -110,7 +302,11 @@ def format_provider_failure_message(prefix: str, exc: Exception) -> str:
     return f"{prefix}: {detail}"
 
 
-def resolve_upstream_api_key(embedder: GoodMemEmbedderConfig) -> str:
+def resolve_upstream_api_key(
+    embedder: GoodMemEmbedderConfig,
+    *,
+    upstream_api_key_override: str | None = None,
+) -> str:
     """Resolve the upstream provider API key for one embedder configuration.
 
     Args:
@@ -124,6 +320,10 @@ def resolve_upstream_api_key(embedder: GoodMemEmbedderConfig) -> str:
         GoodMemConfigurationError: If neither inline credentials nor the
             environment fallback can satisfy the selected embedder.
     """
+    override_api_key = _normalize_optional_text(upstream_api_key_override)
+    if override_api_key is not None:
+        return override_api_key
+
     inline_api_key = _normalize_optional_text(embedder.inline_api_key)
     if inline_api_key is not None:
         return inline_api_key
@@ -277,6 +477,13 @@ def _normalize_optional_text(value: Any) -> str | None:
     text = value.strip()
     if not text:
         return None
+    return text
+
+
+def _normalize_required_text(value: Any, *, error_message: str) -> str:
+    text = _normalize_optional_text(value)
+    if text is None:
+        raise GoodMemConfigurationError(error_message)
     return text
 
 

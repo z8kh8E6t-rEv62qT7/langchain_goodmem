@@ -30,6 +30,7 @@ from langchain_goodmem import (
     GoodMemConnection,
     GoodMemEmbeddings,
 )
+from langchain_goodmem._internal.types import GoodMemEmbedderBootstrapRequest
 
 
 @dataclass(frozen=True)
@@ -85,15 +86,33 @@ class FakeProviderEmbeddings(Embeddings):
 
 @dataclass
 class FakeTransport:
+    embedders: list[FakeRawEmbedder] = field(default_factory=list)
     embedder: FakeRawEmbedder = field(default_factory=FakeRawEmbedder)
     exception: Exception | None = None
     get_calls: list[str] = field(default_factory=list)
+    list_calls: int = 0
+    create_calls: list[GoodMemEmbedderBootstrapRequest] = field(default_factory=list)
+    create_response: FakeRawEmbedder | None = None
 
     def get_embedder(self, *, embedder_id: str) -> FakeRawEmbedder:
         self.get_calls.append(embedder_id)
         if self.exception is not None:
             raise self.exception
         return self.embedder
+
+    def list_embedders(self) -> list[FakeRawEmbedder]:
+        self.list_calls += 1
+        if self.exception is not None:
+            raise self.exception
+        return list(self.embedders)
+
+    def create_embedder(self, request: GoodMemEmbedderBootstrapRequest) -> FakeRawEmbedder:
+        self.create_calls.append(request)
+        if self.exception is not None:
+            raise self.exception
+        response = self.create_response or FakeRawEmbedder(embedder_id="created-embedder")
+        self.embedder = response
+        return response
 
 
 def _connection() -> GoodMemConnection:
@@ -561,3 +580,455 @@ def test_missing_openai_embeddings_class_raises_configuration_error(
         match="could not load OpenAIEmbeddings",
     ):
         embeddings.embed_query("hello")
+
+
+def test_ensure_reuses_single_matching_embedder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = FakeTransport(
+        embedders=[
+            FakeRawEmbedder(
+                embedder_id="embedder-456",
+                endpoint_url="https://other.example",
+            ),
+            FakeRawEmbedder(
+                embedder_id="embedder-123",
+                endpoint_url="https://embeddings.example",
+                model_identifier="text-embedding-3-large",
+                dimensionality=1024,
+                credentials=FakeEndpointCredentials(
+                    kind="CREDENTIAL_KIND_API_KEY",
+                    api_key=FakeApiKeyCredentials(inline_secret="stored-inline-key"),
+                ),
+            ),
+        ]
+    )
+    connections = _patch_transport(monkeypatch, transport)
+
+    embeddings = GoodMemEmbeddings.ensure(
+        connection=_connection(),
+        endpoint_url="https://embeddings.example",
+        model_identifier="text-embedding-3-large",
+        dimensionality=1024,
+    )
+
+    assert isinstance(embeddings, GoodMemEmbeddings)
+    assert embeddings.embedder_id == "embedder-123"
+    assert connections == [_connection(), _connection()]
+    assert transport.list_calls == 1
+    assert transport.create_calls == []
+    assert transport.get_calls == []
+
+
+def test_ensure_ignores_incompatible_near_match_and_creates_embedder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = FakeTransport(
+        embedders=[
+            FakeRawEmbedder(
+                embedder_id="incompatible-embedder",
+                api_path="/v1/not-embeddings",
+                credentials=FakeEndpointCredentials(
+                    kind="CREDENTIAL_KIND_API_KEY",
+                    api_key=FakeApiKeyCredentials(inline_secret="stored-inline-key"),
+                ),
+            )
+        ],
+        create_response=FakeRawEmbedder(
+            embedder_id="created-compatible-embedder",
+            credentials=FakeEndpointCredentials(
+                kind="CREDENTIAL_KIND_API_KEY",
+                api_key=FakeApiKeyCredentials(inline_secret="created-inline-key"),
+            ),
+        ),
+    )
+    _patch_transport(monkeypatch, transport)
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_API_KEY", "env-fallback-key")
+
+    embeddings = GoodMemEmbeddings.ensure(
+        connection=_connection(),
+        endpoint_url="https://embeddings.example",
+        model_identifier="text-embedding-3-large",
+        dimensionality=1024,
+    )
+
+    assert embeddings.embedder_id == "created-compatible-embedder"
+    assert transport.list_calls == 1
+    assert len(transport.create_calls) == 1
+
+
+def test_ensure_reuses_only_compatible_match_when_near_match_is_incompatible(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = FakeTransport(
+        embedders=[
+            FakeRawEmbedder(
+                embedder_id="incompatible-embedder",
+                api_path="/v1/not-embeddings",
+                credentials=FakeEndpointCredentials(
+                    kind="CREDENTIAL_KIND_API_KEY",
+                    api_key=FakeApiKeyCredentials(inline_secret="stored-inline-key"),
+                ),
+            ),
+            FakeRawEmbedder(
+                embedder_id="compatible-embedder",
+                credentials=FakeEndpointCredentials(
+                    kind="CREDENTIAL_KIND_API_KEY",
+                    api_key=FakeApiKeyCredentials(inline_secret="stored-inline-key"),
+                ),
+            ),
+        ]
+    )
+    _patch_transport(monkeypatch, transport)
+
+    embeddings = GoodMemEmbeddings.ensure(
+        connection=_connection(),
+        endpoint_url="https://embeddings.example",
+        model_identifier="text-embedding-3-large",
+        dimensionality=1024,
+    )
+
+    assert embeddings.embedder_id == "compatible-embedder"
+    assert transport.create_calls == []
+
+
+def test_ensure_creates_embedder_when_no_match_exists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = FakeTransport(
+        embedders=[],
+        create_response=FakeRawEmbedder(
+            embedder_id="created-embedder",
+            credentials=FakeEndpointCredentials(
+                kind="CREDENTIAL_KIND_API_KEY",
+                api_key=FakeApiKeyCredentials(inline_secret="created-inline-key"),
+            ),
+        ),
+    )
+    _patch_transport(monkeypatch, transport)
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_API_KEY", "env-fallback-key")
+
+    embeddings = GoodMemEmbeddings.ensure(
+        connection=_connection(),
+        endpoint_url="https://embeddings.example",
+        model_identifier="text-embedding-3-large",
+        dimensionality=1024,
+    )
+
+    assert embeddings.embedder_id == "created-embedder"
+    assert len(transport.create_calls) == 1
+    create_request = transport.create_calls[0]
+    assert create_request.display_name == "langchain-goodmem-openai"
+    assert create_request.api_key == "env-fallback-key"
+
+
+def test_ensure_uses_explicit_api_key_and_display_name_for_creation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = FakeTransport(
+        embedders=[],
+        create_response=FakeRawEmbedder(
+            embedder_id="created-embedder",
+            credentials=FakeEndpointCredentials(
+                kind="CREDENTIAL_KIND_API_KEY",
+                api_key=FakeApiKeyCredentials(inline_secret="created-inline-key"),
+            ),
+        ),
+    )
+    _patch_transport(monkeypatch, transport)
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_API_KEY", "env-fallback-key")
+
+    GoodMemEmbeddings.ensure(
+        connection=_connection(),
+        endpoint_url="https://embeddings.example",
+        model_identifier="text-embedding-3-large",
+        dimensionality=1024,
+        upstream_api_key="explicit-key",
+        display_name="custom-bootstrap-name",
+    )
+
+    assert len(transport.create_calls) == 1
+    create_request = transport.create_calls[0]
+    assert create_request.display_name == "custom-bootstrap-name"
+    assert create_request.api_key == "explicit-key"
+
+
+def test_ensure_rejects_multiple_matching_embedders(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = FakeTransport(
+        embedders=[
+            FakeRawEmbedder(embedder_id="embedder-1"),
+            FakeRawEmbedder(embedder_id="embedder-2"),
+        ]
+    )
+    _patch_transport(monkeypatch, transport)
+
+    with pytest.raises(
+        GoodMemConfigurationError,
+        match="multiple compatible embedders",
+    ):
+        GoodMemEmbeddings.ensure(
+            connection=_connection(),
+            endpoint_url="https://embeddings.example",
+            model_identifier="text-embedding-3-large",
+            dimensionality=1024,
+        )
+
+
+def test_ensure_rejects_created_embedder_that_is_not_usable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = FakeTransport(
+        embedders=[],
+        create_response=FakeRawEmbedder(
+            embedder_id="created-embedder",
+            credentials=None,
+        ),
+    )
+    _patch_transport(monkeypatch, transport)
+    monkeypatch.delenv("GOODMEM_EMBEDDINGS_API_KEY", raising=False)
+
+    with pytest.raises(
+        GoodMemConfigurationError,
+        match="does not expose any credentials",
+    ):
+        GoodMemEmbeddings.ensure(
+            connection=_connection(),
+            endpoint_url="https://embeddings.example",
+            model_identifier="text-embedding-3-large",
+            dimensionality=1024,
+        )
+
+
+def test_ensure_from_env_uses_existing_connection_when_provided(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = FakeTransport(
+        embedders=[
+            FakeRawEmbedder(
+                embedder_id="embedder-123",
+                credentials=FakeEndpointCredentials(
+                    kind="CREDENTIAL_KIND_API_KEY",
+                    api_key=FakeApiKeyCredentials(inline_secret="stored-inline-key"),
+                ),
+            )
+        ]
+    )
+    connections = _patch_transport(monkeypatch, transport)
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_BASE_URL", "https://embeddings.example")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER", "text-embedding-3-large")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_DIMENSIONS", "1024")
+    monkeypatch.delenv("GOODMEM_EMBEDDER_ID", raising=False)
+
+    embeddings = GoodMemEmbeddings.ensure_from_env(connection=_connection())
+
+    assert embeddings.embedder_id == "embedder-123"
+    assert connections == [_connection(), _connection()]
+
+
+def test_ensure_from_env_builds_connection_and_validates_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = FakeTransport(
+        embedders=[
+            FakeRawEmbedder(
+                embedder_id="embedder-123",
+                credentials=FakeEndpointCredentials(
+                    kind="CREDENTIAL_KIND_API_KEY",
+                    api_key=FakeApiKeyCredentials(inline_secret="stored-inline-key"),
+                ),
+            )
+        ]
+    )
+    _patch_transport(monkeypatch, transport)
+    monkeypatch.setenv("GOODMEM_API_KEY", "env-key")
+    monkeypatch.setenv("GOODMEM_BASE_URL", "https://goodmem.example")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_BASE_URL", "https://embeddings.example")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER", "text-embedding-3-large")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_DIMENSIONS", "1024")
+    monkeypatch.delenv("GOODMEM_EMBEDDER_ID", raising=False)
+
+    embeddings = GoodMemEmbeddings.ensure_from_env(verify=False)
+
+    assert embeddings.embedder_id == "embedder-123"
+
+
+def test_ensure_from_env_reuses_explicit_embedder_id_when_bootstrap_env_matches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = FakeTransport(
+        embedder=FakeRawEmbedder(
+            embedder_id="explicit-embedder",
+            credentials=FakeEndpointCredentials(
+                kind="CREDENTIAL_KIND_API_KEY",
+                api_key=FakeApiKeyCredentials(inline_secret="stored-inline-key"),
+            ),
+        )
+    )
+    connections = _patch_transport(monkeypatch, transport)
+    monkeypatch.setenv("GOODMEM_EMBEDDER_ID", "explicit-embedder")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_BASE_URL", "https://embeddings.example")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER", "text-embedding-3-large")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_DIMENSIONS", "1024")
+
+    embeddings = GoodMemEmbeddings.ensure_from_env(connection=_connection())
+
+    assert embeddings.embedder_id == "explicit-embedder"
+    assert connections == [_connection(), _connection()]
+    assert transport.get_calls == ["explicit-embedder"]
+    assert transport.list_calls == 0
+    assert transport.create_calls == []
+
+
+@pytest.mark.parametrize(
+    ("env_name", "env_value", "match"),
+    [
+        (
+            "GOODMEM_EMBEDDINGS_BASE_URL",
+            None,
+            "GOODMEM_EMBEDDINGS_BASE_URL",
+        ),
+        (
+            "GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER",
+            None,
+            "GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER",
+        ),
+        (
+            "GOODMEM_EMBEDDINGS_DIMENSIONS",
+            None,
+            "GOODMEM_EMBEDDINGS_DIMENSIONS",
+        ),
+        (
+            "GOODMEM_EMBEDDINGS_DIMENSIONS",
+            "bad",
+            "GOODMEM_EMBEDDINGS_DIMENSIONS",
+        ),
+    ],
+)
+def test_ensure_from_env_requires_bootstrap_env(
+    monkeypatch: pytest.MonkeyPatch,
+    env_name: str,
+    env_value: str | None,
+    match: str,
+) -> None:
+    transport = FakeTransport()
+    _patch_transport(monkeypatch, transport)
+    monkeypatch.setenv("GOODMEM_API_KEY", "env-key")
+    monkeypatch.setenv("GOODMEM_BASE_URL", "https://goodmem.example")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_BASE_URL", "https://embeddings.example")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER", "text-embedding-3-large")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_DIMENSIONS", "1024")
+    monkeypatch.delenv("GOODMEM_EMBEDDER_ID", raising=False)
+    if env_value is None:
+        monkeypatch.delenv(env_name, raising=False)
+    else:
+        monkeypatch.setenv(env_name, env_value)
+
+    with pytest.raises(GoodMemConfigurationError, match=match):
+        GoodMemEmbeddings.ensure_from_env()
+
+
+@pytest.mark.parametrize(
+    ("env_name", "env_value", "match"),
+    [
+        (
+            "GOODMEM_EMBEDDINGS_BASE_URL",
+            None,
+            "GOODMEM_EMBEDDINGS_BASE_URL",
+        ),
+        (
+            "GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER",
+            None,
+            "GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER",
+        ),
+        (
+            "GOODMEM_EMBEDDINGS_DIMENSIONS",
+            None,
+            "GOODMEM_EMBEDDINGS_DIMENSIONS",
+        ),
+        (
+            "GOODMEM_EMBEDDINGS_DIMENSIONS",
+            "bad",
+            "GOODMEM_EMBEDDINGS_DIMENSIONS",
+        ),
+    ],
+)
+def test_ensure_from_env_with_embedder_id_still_requires_bootstrap_env(
+    monkeypatch: pytest.MonkeyPatch,
+    env_name: str,
+    env_value: str | None,
+    match: str,
+) -> None:
+    transport = FakeTransport(
+        embedder=FakeRawEmbedder(
+            embedder_id="explicit-embedder",
+            credentials=FakeEndpointCredentials(
+                kind="CREDENTIAL_KIND_API_KEY",
+                api_key=FakeApiKeyCredentials(inline_secret="stored-inline-key"),
+            ),
+        )
+    )
+    _patch_transport(monkeypatch, transport)
+    monkeypatch.setenv("GOODMEM_API_KEY", "env-key")
+    monkeypatch.setenv("GOODMEM_BASE_URL", "https://goodmem.example")
+    monkeypatch.setenv("GOODMEM_EMBEDDER_ID", "explicit-embedder")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_BASE_URL", "https://embeddings.example")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER", "text-embedding-3-large")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_DIMENSIONS", "1024")
+    if env_value is None:
+        monkeypatch.delenv(env_name, raising=False)
+    else:
+        monkeypatch.setenv(env_name, env_value)
+
+    with pytest.raises(GoodMemConfigurationError, match=match):
+        GoodMemEmbeddings.ensure_from_env()
+
+
+@pytest.mark.parametrize(
+    ("endpoint_url", "model_identifier", "dimensions", "match"),
+    [
+        (
+            "https://other.example",
+            "text-embedding-3-large",
+            "1024",
+            "GOODMEM_EMBEDDINGS_BASE_URL",
+        ),
+        (
+            "https://embeddings.example",
+            "text-embedding-3-small",
+            "1024",
+            "GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER",
+        ),
+        (
+            "https://embeddings.example",
+            "text-embedding-3-large",
+            "2048",
+            "GOODMEM_EMBEDDINGS_DIMENSIONS",
+        ),
+    ],
+)
+def test_ensure_from_env_rejects_embedder_id_when_bootstrap_env_conflicts(
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint_url: str,
+    model_identifier: str,
+    dimensions: str,
+    match: str,
+) -> None:
+    transport = FakeTransport(
+        embedder=FakeRawEmbedder(
+            embedder_id="explicit-embedder",
+            credentials=FakeEndpointCredentials(
+                kind="CREDENTIAL_KIND_API_KEY",
+                api_key=FakeApiKeyCredentials(inline_secret="stored-inline-key"),
+            ),
+        )
+    )
+    _patch_transport(monkeypatch, transport)
+    monkeypatch.setenv("GOODMEM_EMBEDDER_ID", "explicit-embedder")
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_BASE_URL", endpoint_url)
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER", model_identifier)
+    monkeypatch.setenv("GOODMEM_EMBEDDINGS_DIMENSIONS", dimensions)
+
+    with pytest.raises(GoodMemConfigurationError, match=match):
+        GoodMemEmbeddings.ensure_from_env(connection=_connection())

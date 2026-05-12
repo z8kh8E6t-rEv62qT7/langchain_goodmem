@@ -3,7 +3,8 @@
 `langchain-goodmem` is a LangChain integration for GoodMem semantic search.
 It keeps the LangChain-facing surface intentionally small and focuses on the
 core workflows this package actually supports: create or bind to a GoodMem
-space, write memories, and retrieve semantic matches.
+space, write memories, retrieve semantic matches, and optionally expose one
+compatible GoodMem embedder as a LangChain `Embeddings` object.
 
 ## What GoodMem Means Here
 
@@ -39,6 +40,28 @@ That means write and search APIs return different identifiers:
 - Use `GoodMemEmbeddings(...)` only when you need local LangChain embedding
   calls or when `GoodMemVectorStore.create(..., embedding=...)` should retain a
   LangChain `Embeddings` object on the returned store.
+- Use `GoodMemEmbeddings.ensure(...)` or `GoodMemEmbeddings.ensure_from_env(...)`
+  when you want the package to bridge the clean-slate setup gap by finding or
+  creating one compatible `OPENAI`-style GoodMem embedder before returning a
+  normal `GoodMemEmbeddings` instance. `ensure_from_env(...)` also supports
+  `GOODMEM_EMBEDDER_ID` reuse when the bootstrap environment is present and
+  explicitly matches that embedder.
+
+## Two Startup Paths
+
+For embeddings workflows, there are two intentionally different ways to begin:
+
+- Existing-resource path: if you already have a compatible GoodMem embedder,
+  construct `GoodMemEmbeddings(embedder_id=..., connection=...)` directly.
+- Clean-slate bootstrap path: if you do not yet have a compatible embedder,
+  use `GoodMemEmbeddings.ensure(...)` or `GoodMemEmbeddings.ensure_from_env(...)`.
+  If you set `GOODMEM_EMBEDDER_ID` for `ensure_from_env(...)`, still provide
+  the bootstrap environment and keep it aligned with that embedder so config
+  drift is caught early.
+
+The bootstrap helpers are intentionally narrow. They only cover the package's
+own `OPENAI`-compatible embeddings workflow, and they do not turn
+`langchain-goodmem` into a general GoodMem resource CRUD layer.
 
 ## Before You Start
 
@@ -47,6 +70,13 @@ That means write and search APIs return different identifiers:
   values directly into `GoodMemConnection(...)`.
 - If you plan to use `GoodMemEmbeddings`, install the optional extra with
   `pip install -e '.[openai]'`.
+- If you plan to use the bootstrap helpers, also provide
+  `GOODMEM_EMBEDDINGS_BASE_URL`, `GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER`, and
+  `GOODMEM_EMBEDDINGS_DIMENSIONS`. Set `GOODMEM_EMBEDDINGS_API_KEY` when the
+  upstream provider key must be stored on a newly created embedder or forwarded
+  because the resolved embedder does not expose a readable inline secret. When
+  you also set `GOODMEM_EMBEDDER_ID`, those bootstrap values are still
+  required and must match the selected embedder exactly.
 
 If you are new to GoodMem itself, the official product documentation is the best
 place to learn the platform concepts and server setup:
@@ -62,6 +92,7 @@ place to learn the platform concepts and server setup:
 ## Examples
 
 - [Existing-space semantic search example](examples/basic_semantic_search.py)
+- [Clean-slate embeddings bootstrap example](examples/goodmem_embeddings_bootstrap_workflow.py)
 - [Embeddings-driven create example](examples/goodmem_embeddings_workflow.py)
 
 ## Local Docs Build

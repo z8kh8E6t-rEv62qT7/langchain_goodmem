@@ -8,3 +8,4 @@ build/
 _build/
 local.env
 .DS_Store
+internal.md

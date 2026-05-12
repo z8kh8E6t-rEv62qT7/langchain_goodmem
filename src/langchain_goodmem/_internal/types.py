@@ -126,6 +126,40 @@ class GoodMemEmbedderConfig:
     inline_api_key: str | None = None
 
 
+@dataclass(frozen=True)
+class GoodMemEmbedderBootstrapRequest:
+    """Normalized bootstrap request used by ``GoodMemEmbeddings.ensure``.
+
+    Args:
+        display_name: Display name assigned when a new embedder is created.
+        endpoint_url: Upstream provider endpoint URL.
+        model_identifier: Upstream embedding model identifier.
+        dimensionality: Required embedding dimensionality.
+        provider_type: Fixed provider type for the bootstrap flow.
+        supported_modalities: Required supported modalities for both matching
+            and creation.
+        api_key: Optional upstream API key stored on a newly created embedder.
+
+    Attributes:
+        display_name: Display name assigned when a new embedder is created.
+        endpoint_url: Upstream provider endpoint URL.
+        model_identifier: Upstream embedding model identifier.
+        dimensionality: Required embedding dimensionality.
+        provider_type: Fixed provider type for the bootstrap flow.
+        supported_modalities: Required supported modalities for both matching
+            and creation.
+        api_key: Optional upstream API key stored on a newly created embedder.
+    """
+
+    display_name: str
+    endpoint_url: str
+    model_identifier: str
+    dimensionality: int
+    provider_type: str = "OPENAI"
+    supported_modalities: tuple[str, ...] = ("TEXT",)
+    api_key: str | None = None
+
+
 class SupportsMemoryOperationsTransport(Protocol):
     """Narrow transport surface used by vector-store memory operations.
 
@@ -200,5 +234,26 @@ class SupportsEmbedderTransport(Protocol):
 
         Returns:
             A transport-specific embedder response object.
+        """
+        ...
+
+    def list_embedders(self) -> Iterable[object]:
+        """List GoodMem embedders visible to the current client.
+
+        Returns:
+            An iterable of transport-specific embedder response objects.
+        """
+        ...
+
+    def create_embedder(self, request: GoodMemEmbedderBootstrapRequest) -> object:
+        """Create one GoodMem embedder from a normalized bootstrap request.
+
+        Args:
+            request: Package-owned bootstrap request describing the embedder to
+                create.
+
+        Returns:
+            A transport-specific response object describing the created
+            embedder.
         """
         ...
