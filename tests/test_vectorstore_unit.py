@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -38,6 +39,8 @@ from langchain_goodmem import (
     GoodMemVectorStore,
 )
 from langchain_goodmem._internal.memory_ops import _order_batch_create_results
+
+_DEFAULT_DELETE_RESPONSE = object()
 
 
 @dataclass(frozen=True)
@@ -123,9 +126,12 @@ class FakeTransport:
     create_exception: Exception | None = None
     batch_exception: Exception | None = None
     retrieve_exception: Exception | None = None
+    delete_exception: Exception | None = None
+    delete_response: Any = _DEFAULT_DELETE_RESPONSE
     create_calls: list[dict[str, Any]] = field(default_factory=list)
     batch_calls: list[dict[str, Any]] = field(default_factory=list)
     retrieve_calls: list[dict[str, Any]] = field(default_factory=list)
+    delete_calls: list[dict[str, Any]] = field(default_factory=list)
 
     def create_space(self, request: Any) -> FakeSpaceResponse:
         self.create_calls.append(
@@ -161,6 +167,23 @@ class FakeTransport:
         if self.batch_exception is not None:
             raise self.batch_exception
         return self.batch_response
+
+    def delete_memories(self, *, memory_ids: list[str]) -> Any:
+        self.delete_calls.append({"memory_ids": list(memory_ids)})
+        if self.delete_exception is not None:
+            raise self.delete_exception
+        if self.delete_response is not _DEFAULT_DELETE_RESPONSE:
+            return self.delete_response
+        return FakeBatchMemoryResponse(
+            results=[
+                FakeBatchMemoryResult(
+                    success=True,
+                    request_index=index,
+                    memory_id=memory_id,
+                )
+                for index, memory_id in enumerate(memory_ids)
+            ]
+        )
 
     @contextmanager
     def retrieve_memories(
@@ -987,6 +1010,101 @@ def test_similarity_search_with_score_includes_score_metadata(
             0.82,
         )
     ]
+
+
+def test_delete_removes_explicit_memory_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = FakeTransport()
+    _patch_transports(monkeypatch, transport)
+    store = GoodMemVectorStore(space_id="space-123", connection=_connection())
+
+    assert store.delete(ids=[" memory-1 ", "memory-2"]) is True
+
+    assert transport.delete_calls == [
+        {"memory_ids": ["memory-1", "memory-2"]},
+    ]
+
+
+def test_delete_empty_ids_returns_true_without_transport_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = FakeTransport()
+    _patch_transports(monkeypatch, transport)
+    store = GoodMemVectorStore(space_id="space-123", connection=_connection())
+
+    assert store.delete(ids=[]) is True
+
+    assert transport.delete_calls == []
+
+
+def test_delete_validates_inputs_before_transport_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = FakeTransport()
+    _patch_transports(monkeypatch, transport)
+    store = GoodMemVectorStore(space_id="space-123", connection=_connection())
+
+    with pytest.raises(ValueError, match="explicit memory IDs"):
+        store.delete()
+
+    with pytest.raises(ValueError, match="not a string"):
+        store.delete(ids="memory-1")  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="ids at index 0"):
+        store.delete(ids=[""])
+
+    with pytest.raises(ValueError, match="only non-empty memory ID strings"):
+        store.delete(ids=[None])  # type: ignore[list-item]
+
+    with pytest.raises(GoodMemDuplicateIDError, match="Duplicate memory IDs"):
+        store.delete(ids=["memory-1", "memory-1"])
+
+    with pytest.raises(GoodMemDuplicateIDError, match="Duplicate memory IDs"):
+        store.delete(ids=[" memory-1 ", "memory-1"])
+
+    with pytest.raises(ValueError, match="unexpected keyword argument: filter"):
+        store.delete(ids=["memory-1"], filter="topic")
+
+    assert transport.delete_calls == []
+
+
+def test_delete_propagates_backend_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend_error = GoodMemAPIError("delete failed")
+    transport = FakeTransport(delete_exception=backend_error)
+    _patch_transports(monkeypatch, transport)
+    store = GoodMemVectorStore(space_id="space-123", connection=_connection())
+
+    with pytest.raises(GoodMemAPIError) as exc_info:
+        store.delete(ids=["memory-1"])
+
+    assert exc_info.value is backend_error
+
+
+@pytest.mark.parametrize(
+    ("delete_response", "match"),
+    [
+        (None, "did not return a response"),
+        (object(), "did not return batch results"),
+        (SimpleNamespace(results=None), "did not return batch results"),
+        (FakeBatchMemoryResponse(results=[]), "result count that did not match"),
+    ],
+)
+def test_delete_rejects_malformed_batch_delete_responses(
+    monkeypatch: pytest.MonkeyPatch,
+    delete_response: Any,
+    match: str,
+) -> None:
+    transport = FakeTransport(delete_response=delete_response)
+    _patch_transports(monkeypatch, transport)
+    store = GoodMemVectorStore(space_id="space-123", connection=_connection())
+
+    with pytest.raises(GoodMemAPIError, match=match):
+        store.delete(ids=["memory-1"])
+
+    assert transport.delete_calls == [{"memory_ids": ["memory-1"]}]
 
 
 def test_similarity_search_validates_k(

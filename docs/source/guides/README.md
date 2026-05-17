@@ -8,6 +8,8 @@ Read these pages in order if you are new to the package:
   a GoodMem space.
 - `Create A Space` explains the package-owned create helper and when to choose
   `embedders=` versus `embedding=`.
+- `Manage GoodMem RAG Resources` explains the resource facade for embedders,
+  spaces, memories, and clean-slate vector-store bootstrap.
 - `Embeddings Workflow` explains when `GoodMemEmbeddings` is necessary and when
   it is not.
 
@@ -24,5 +26,6 @@ Two cross-cutting rules are worth remembering before you dive in:
 getting-started
 existing-space
 create-space
+resources
 embeddings
 ```

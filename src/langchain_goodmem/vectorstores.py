@@ -45,10 +45,9 @@ GoodMem processes new memories asynchronously before they become searchable, so
 fresh writes may not appear in retrieval results immediately.
 
 The create helper intentionally keeps a minimal LangChain-facing surface. If
-you need GoodMem-specific space options such as labels, owner settings, public
-access controls, explicit chunking configuration, or explicit space IDs, create
-the space through the GoodMem SDK first and then attach a
-``GoodMemVectorStore`` to the resulting ``space_id``.
+you need GoodMem resource helpers around the normal RAG/search path, use
+``GoodMemResources``. Broader platform administration remains outside this
+LangChain integration.
 """
 
 from __future__ import annotations
@@ -60,7 +59,12 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
 
-from ._internal.memory_ops import add_memories, create_space, search_memories
+from ._internal.memory_ops import (
+    add_memories,
+    create_space,
+    delete_memories,
+    search_memories,
+)
 from ._internal.transport import GoodMemTransport
 from ._internal.types import (
     GoodMemSearchHit,
@@ -411,6 +415,51 @@ class GoodMemVectorStore(VectorStore):
             (_document_from_hit(hit, include_score=True), hit.score)
             for hit in hits
         ]
+
+    def delete(self, ids: list[str] | None = None, **kwargs: Any) -> bool:
+        """Delete GoodMem memories by memory ID.
+
+        Args:
+            ids: GoodMem memory IDs to delete. ``None`` is rejected because it
+                would imply deleting an entire space, which this LangChain
+                adapter does not expose implicitly.
+            **kwargs: No service-specific keyword arguments are supported.
+
+        Returns:
+            ``True`` when the delete request succeeds. Empty ID lists return
+            ``True`` without contacting GoodMem.
+
+        Raises:
+            ValueError: If ``ids`` is ``None``, contains blank values, contains
+                invalid values, or if unexpected keyword arguments are passed.
+            GoodMemDuplicateIDError: If duplicate memory IDs are supplied.
+            GoodMemAPIError: If GoodMem rejects the delete request or returns a
+                malformed batch-delete response.
+        """
+        raise_for_unexpected_kwargs("GoodMemVectorStore.delete", kwargs)
+        if ids is None:
+            raise ValueError(
+                "GoodMemVectorStore.delete requires explicit memory IDs; "
+                "ids=None is not supported."
+            )
+        if isinstance(ids, str):
+            raise ValueError("ids must be a list of memory ID strings, not a string.")
+
+        normalized_ids = normalize_optional_ids(
+            list(ids),
+            source="ids",
+            exception_type=ValueError,
+        )
+        if not normalized_ids:
+            return True
+        if any(memory_id is None for memory_id in normalized_ids):
+            raise ValueError("ids must contain only non-empty memory ID strings.")
+        resolved_ids = [
+            memory_id.strip() for memory_id in normalized_ids if memory_id is not None
+        ]
+        validate_duplicate_ids(resolved_ids)
+        delete_memories(self._transport, memory_ids=resolved_ids)
+        return True
 
     def _similarity_search_with_relevance_scores(
         self,

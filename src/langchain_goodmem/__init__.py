@@ -3,6 +3,7 @@
 This package exposes a small, explicit LangChain-facing surface for GoodMem:
 
 - ``GoodMemConnection`` for shared API/TLS configuration
+- ``GoodMemResources`` for GoodMem resources needed by normal RAG workflows
 - ``GoodMemVectorStore`` for writing memories and retrieving semantic matches
 - ``GoodMemEmbeddings`` for GoodMem-managed ``OPENAI``-compatible embedders
 - ``GoodMemSpaceEmbedder`` for create-time space/embedder declarations
@@ -45,10 +46,12 @@ variables consumed by ``GoodMemConnection.from_env()``:
 
 Choose a store-binding flow:
 
-- if you already have a GoodMem space ID from the GoodMem SDK, CLI, or web
-  console, bind directly with ``GoodMemVectorStore(space_id=..., ...)``
+- if you already have a GoodMem space ID, bind directly with
+  ``GoodMemVectorStore(space_id=..., ...)``
 - if you need the package to create a new space for you, use
   ``GoodMemVectorStore.create(...)``
+- if you need to manage the GoodMem resources around the LangChain workflow,
+  use ``GoodMemResources``
 
 Choose an embeddings flow:
 
@@ -60,9 +63,10 @@ Choose an embeddings flow:
   and, when reusing ``GOODMEM_EMBEDDER_ID`` through the environment helper,
   keep the bootstrap environment present and aligned with that embedder
 
-Those bootstrap helpers are intentionally narrow. They close the package's
-clean-slate onboarding gap for embeddings without expanding the repository into
-a general GoodMem resource-management API.
+``GoodMemResources`` covers the GoodMem resources needed for normal
+LangChain RAG/search workflows: embedders, spaces, memories, and search
+bootstrap. It intentionally leaves broader platform administration to GoodMem's
+SDK, CLI, and UI.
 
 Minimal existing-space add-and-search flow:
 
@@ -113,6 +117,12 @@ from .errors import (
     GoodMemOperationError,
     LangChainGoodMemError,
 )
+from .resources import (
+    GoodMemEmbedderInfo,
+    GoodMemMemoryInfo,
+    GoodMemResources,
+    GoodMemSpaceInfo,
+)
 from .space_embedders import GoodMemSpaceEmbedder
 from .vectorstores import GoodMemVectorStore
 
@@ -123,9 +133,13 @@ __all__ = [
     "GoodMemConfigurationError",
     "GoodMemConnection",
     "GoodMemDuplicateIDError",
+    "GoodMemEmbedderInfo",
     "GoodMemEmbeddings",
+    "GoodMemMemoryInfo",
     "GoodMemOperationError",
+    "GoodMemResources",
     "GoodMemSpaceEmbedder",
+    "GoodMemSpaceInfo",
     "GoodMemVectorStore",
     "LangChainGoodMemError",
 ]

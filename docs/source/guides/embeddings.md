@@ -23,9 +23,9 @@ There are two embeddings startup paths:
   `GOODMEM_EMBEDDER_ID` through `ensure_from_env(...)`, the bootstrap
   environment must still be present and must match that embedder exactly.
 
-The bootstrap helpers are intentionally narrow. They exist to close the
-clean-slate onboarding gap for the package's own embeddings workflow, not to
-turn this repository into a general GoodMem resource CRUD layer.
+For a broader clean-slate workflow, use `GoodMemResources`. It can resolve an
+embedder, create a space, and return a ready-to-use `GoodMemVectorStore` while
+keeping broader GoodMem platform administration out of this package.
 
 The examples below show both clean-slate bootstrap and the direct
 embeddings-driven path, and the API section after them explains the exact setup

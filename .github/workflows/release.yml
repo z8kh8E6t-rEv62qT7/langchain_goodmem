@@ -30,6 +30,7 @@ jobs:
           python -m pytest -q
           tests/test_connection_unit.py
           tests/test_embeddings_unit.py
+          tests/test_resources_unit.py
           tests/test_transport_unit.py
           tests/test_vectorstore_unit.py
 

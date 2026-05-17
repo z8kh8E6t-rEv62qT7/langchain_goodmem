@@ -3,8 +3,9 @@
 `langchain-goodmem` is a LangChain integration for GoodMem semantic search.
 It keeps the LangChain-facing surface intentionally small and focuses on the
 core workflows this package actually supports: create or bind to a GoodMem
-space, write memories, retrieve semantic matches, and optionally expose one
-compatible GoodMem embedder as a LangChain `Embeddings` object.
+space, manage the GoodMem resources needed for RAG/search, write memories,
+retrieve semantic matches, and optionally expose one compatible GoodMem
+embedder as a LangChain `Embeddings` object.
 
 ## What GoodMem Means Here
 
@@ -26,6 +27,8 @@ That means write and search APIs return different identifiers:
 ## Core Capabilities
 
 - `GoodMemVectorStore` binds to an existing GoodMem space or creates a new one
+- `GoodMemResources` manages the embedders, spaces, and memories needed for
+  normal LangChain RAG/search workflows without exposing the full GoodMem SDK
 - `GoodMemEmbeddings` exposes a GoodMem-managed `OPENAI`-compatible embedder as
   a LangChain `Embeddings` implementation
 - the integration keeps create, write, search, filter, and error semantics
@@ -34,9 +37,11 @@ That means write and search APIs return different identifiers:
 ## Which Entry Point Should I Use?
 
 - Use `GoodMemVectorStore(space_id=..., connection=...)` when you already have a
-  GoodMem space ID from the GoodMem SDK, CLI, or web console.
+  GoodMem space ID.
 - Use `GoodMemVectorStore.create(...)` when you want this package to create a
   new space for you.
+- Use `GoodMemResources(...)` when you need to create/list/get/delete the
+  embedders, spaces, or memories used by the normal LangChain workflow.
 - Use `GoodMemEmbeddings(...)` only when you need local LangChain embedding
   calls or when `GoodMemVectorStore.create(..., embedding=...)` should retain a
   LangChain `Embeddings` object on the returned store.
@@ -59,9 +64,11 @@ For embeddings workflows, there are two intentionally different ways to begin:
   the bootstrap environment and keep it aligned with that embedder so config
   drift is caught early.
 
-The bootstrap helpers are intentionally narrow. They only cover the package's
-own `OPENAI`-compatible embeddings workflow, and they do not turn
-`langchain-goodmem` into a general GoodMem resource CRUD layer.
+`GoodMemResources.bootstrap_vector_store(...)` is the one-shot clean-slate path:
+it can resolve a compatible embedder, create a space, and return a ready-to-use
+`GoodMemVectorStore`. Broader platform administration such as API keys, server
+init, migrations, system operations, and LLM/reranker/OCR/extension management
+stays in GoodMem's SDK, CLI, and UI.
 
 ## Before You Start
 
@@ -99,5 +106,5 @@ place to learn the platform concepts and server setup:
 
 ```bash
 pip install -e '.[docs]'
-./.venv/bin/sphinx-build -W -b html docs/source docs/_build/html
+./.venv/bin/sphinx-build -W -b html docs/source docs/build/html
 ```

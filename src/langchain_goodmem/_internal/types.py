@@ -77,15 +77,18 @@ class GoodMemSpaceCreateRequest:
         name: Requested GoodMem space name.
         space_embedders: Package-owned embedder declarations to attach to the
             created space.
+        labels: Optional GoodMem labels attached to the created space.
 
     Attributes:
         name: Requested GoodMem space name.
         space_embedders: Package-owned embedder declarations to attach to the
             created space.
+        labels: Optional GoodMem labels attached to the created space.
     """
 
     name: str
     space_embedders: list[GoodMemSpaceEmbedder]
+    labels: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -160,6 +163,29 @@ class GoodMemEmbedderBootstrapRequest:
     api_key: str | None = None
 
 
+@dataclass(frozen=True)
+class GoodMemMemoryCreateRequest:
+    """Normalized create-memory request used by the resource facade.
+
+    Args:
+        space_id: Target GoodMem space ID.
+        content: Text content stored as the GoodMem memory body.
+        metadata: Normalized metadata dictionary attached to the memory.
+        memory_id: Optional strict-create memory ID supplied by the caller.
+
+    Attributes:
+        space_id: Target GoodMem space ID.
+        content: Text content stored as the GoodMem memory body.
+        metadata: Normalized metadata dictionary attached to the memory.
+        memory_id: Optional strict-create memory ID supplied by the caller.
+    """
+
+    space_id: str
+    content: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+    memory_id: str | None = None
+
+
 class SupportsMemoryOperationsTransport(Protocol):
     """Narrow transport surface used by vector-store memory operations.
 
@@ -193,6 +219,17 @@ class SupportsMemoryOperationsTransport(Protocol):
         Returns:
             A transport-specific batch response object containing one result per
             write request.
+        """
+        ...
+
+    def delete_memories(self, *, memory_ids: list[str]) -> object:
+        """Delete a batch of GoodMem memories by memory ID.
+
+        Args:
+            memory_ids: Non-empty GoodMem memory IDs to delete.
+
+        Returns:
+            A transport-specific batch-delete response object.
         """
         ...
 
@@ -237,8 +274,19 @@ class SupportsEmbedderTransport(Protocol):
         """
         ...
 
-    def list_embedders(self) -> Iterable[object]:
+    def list_embedders(
+        self,
+        *,
+        label: dict[str, str] | None = None,
+        owner_id: str | None = None,
+        provider_type: str | None = None,
+    ) -> Iterable[object]:
         """List GoodMem embedders visible to the current client.
+
+        Args:
+            label: Optional label filter forwarded to GoodMem.
+            owner_id: Optional owner filter forwarded to GoodMem.
+            provider_type: Optional provider type filter forwarded to GoodMem.
 
         Returns:
             An iterable of transport-specific embedder response objects.
@@ -256,4 +304,56 @@ class SupportsEmbedderTransport(Protocol):
             A transport-specific response object describing the created
             embedder.
         """
+        ...
+
+
+class SupportsResourceOperationsTransport(
+    SupportsMemoryOperationsTransport,
+    SupportsEmbedderTransport,
+    Protocol,
+):
+    """Transport surface used by the public GoodMem resource facade."""
+
+    def delete_embedder(self, *, embedder_id: str) -> object:
+        """Delete one GoodMem embedder by ID."""
+        ...
+
+    def get_space(self, *, space_id: str) -> object:
+        """Load one GoodMem space by ID."""
+        ...
+
+    def list_spaces(
+        self,
+        *,
+        label: dict[str, str] | None = None,
+        name_filter: str | None = None,
+        max_items: int | None = None,
+    ) -> Iterable[object]:
+        """List GoodMem spaces visible to the current client."""
+        ...
+
+    def delete_space(self, *, space_id: str) -> object:
+        """Delete one GoodMem space by ID."""
+        ...
+
+    def create_memory(self, request: GoodMemMemoryCreateRequest) -> object:
+        """Create one GoodMem memory from a normalized request."""
+        ...
+
+    def get_memory(self, *, memory_id: str, include_content: bool = False) -> object:
+        """Load one GoodMem memory by ID."""
+        ...
+
+    def list_memories(
+        self,
+        *,
+        space_id: str,
+        filter_expression: str | None = None,
+        max_items: int | None = None,
+    ) -> Iterable[object]:
+        """List GoodMem memories in one space."""
+        ...
+
+    def delete_memory(self, *, memory_id: str) -> object:
+        """Delete one GoodMem memory by ID."""
         ...

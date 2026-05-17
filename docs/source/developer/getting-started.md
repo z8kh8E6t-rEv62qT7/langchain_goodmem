@@ -13,14 +13,14 @@ The package is intentionally narrow:
 - it exposes GoodMem spaces as LangChain-facing vector-store workflows
 - it exposes one compatible class of GoodMem-managed embedders as LangChain
   `Embeddings`
-- it now includes one narrow bootstrap path that can find or create a single
-  compatible embedder for the `GoodMemEmbeddings` workflow
+- it includes `GoodMemResources` for embedders, spaces, memories, and
+  clean-slate vector-store bootstrap needed by normal RAG/search workflows
 - it keeps validation, transport mapping, and error normalization inside
   package-owned layers so behavior stays explicit and testable
 
-If you need the full GoodMem platform surface such as advanced space settings,
-broader API coverage, or direct resource administration, contributors should
-expect to use the official GoodMem SDK or API alongside this package rather
+If you need the full GoodMem platform surface such as API keys, server init,
+migrations, system operations, or LLM/reranker/OCR/extension administration,
+contributors should expect to use the official GoodMem SDK, CLI, or UI rather
 than growing `langchain-goodmem` into a full mirror of the platform.
 
 ## GoodMem Concepts That Matter To Contributors
@@ -35,9 +35,8 @@ layers:
 - an `embedder` is a GoodMem-managed embedding configuration that can be
   attached to a space and, in some cases, exposed locally as LangChain
   `Embeddings`
-- the bootstrap helpers still do not make this repository a general GoodMem
-  resource CRUD layer; they exist only to close the clean-slate onboarding gap
-  for one `OPENAI`-compatible embeddings path
+- `GoodMemResources` covers the GoodMem resources needed by the normal
+  LangChain RAG/search path without becoming a full platform admin client
 - metadata filters apply to memory-level JSON metadata through the GoodMem
   filter language, not to chunk-level LangChain result objects
 - search is eventually consistent because writes need to be processed into
@@ -99,8 +98,8 @@ Start from the entrypoint that matches the change you want to make:
   [Internal Types](internal-types.md) page.
 - unit tests
   Start with [Testing](testing.md), then narrow to `tests/test_connection_unit.py`,
-  `tests/test_embeddings_unit.py`, `tests/test_transport_unit.py`, or
-  `tests/test_vectorstore_unit.py`.
+  `tests/test_embeddings_unit.py`, `tests/test_resources_unit.py`,
+  `tests/test_transport_unit.py`, or `tests/test_vectorstore_unit.py`.
 - live integration helpers
   Read `tests/_integration_live_support.py` and the
   [Test Helpers](test-helpers.md) page before changing live coverage.
@@ -119,8 +118,8 @@ pip install -e '.[docs]'
 Rebuild docs:
 
 ```bash
-./.venv/bin/sphinx-build -W -E -b text docs/source docs/_build/text
-./.venv/bin/sphinx-build -W -E -b html docs/source docs/_build/html
+./.venv/bin/sphinx-build -W -E -b text docs/source docs/build/text
+./.venv/bin/sphinx-build -W -E -b html docs/source docs/build/html
 ```
 
 Run the unit suite:
@@ -129,6 +128,7 @@ Run the unit suite:
 ./.venv/bin/python -m pytest \
   tests/test_connection_unit.py \
   tests/test_embeddings_unit.py \
+  tests/test_resources_unit.py \
   tests/test_transport_unit.py \
   tests/test_vectorstore_unit.py
 ```

@@ -10,8 +10,10 @@ Suite map:
 - `test_embeddings_unit` isolates `GoodMemEmbeddings` with fake transports and
   fake upstream providers, including bootstrap matching and ensure-from-env
   behavior
+- `test_resources_unit` covers the public `GoodMemResources` facade and
+  clean-slate vector-store bootstrap
 - `test_transport_unit` checks the SDK boundary and error normalization logic,
-  including the minimal embedder bootstrap mapping
+  including resource method mapping
 - `test_vectorstore_unit` covers the main LangChain-facing write and retrieval
   behavior
 
@@ -24,6 +26,10 @@ touches the failing layer before you run the broader matrix.
 
 ```{eval-rst}
 .. automodule:: tests.test_embeddings_unit
+```
+
+```{eval-rst}
+.. automodule:: tests.test_resources_unit
 ```
 
 ```{eval-rst}

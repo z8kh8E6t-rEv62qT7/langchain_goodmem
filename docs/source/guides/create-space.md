@@ -19,10 +19,10 @@ Choose the create-time embedder input this way:
 - use `embedding=GoodMemEmbeddings(...)` when the same GoodMem embedder should
   both back the new space and remain available locally as `store.embeddings`
 
-If you need broader GoodMem space controls such as labels, ownership,
-public-read settings, client-specified IDs, or chunking configuration, create
-the space through the GoodMem SDK or API first and then bind
-`GoodMemVectorStore` to the resulting `space_id`.
+If you need to manage the GoodMem resources around the normal LangChain
+workflow, use `GoodMemResources`. It can create spaces with labels, list/get
+spaces, delete spaces, and bootstrap a vector store. Broader platform
+administration remains in GoodMem's SDK, CLI, and UI.
 
 ```{eval-rst}
 .. automethod:: langchain_goodmem.vectorstores.GoodMemVectorStore.create

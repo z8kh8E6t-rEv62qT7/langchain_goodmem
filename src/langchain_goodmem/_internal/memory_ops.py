@@ -80,6 +80,25 @@ def add_memories(
     return _resolve_batch_create_response(response, writes=writes)
 
 
+def delete_memories(
+    transport: SupportsMemoryOperationsTransport,
+    *,
+    memory_ids: list[str],
+) -> None:
+    """Delete a batch of GoodMem memories.
+
+    Args:
+        transport: Transport implementation exposing batch-delete behavior.
+        memory_ids: GoodMem memory IDs to delete.
+
+    Raises:
+        GoodMemAPIError: If the response is missing, malformed, reports failed
+            selectors, or does not match the requested delete count.
+    """
+    response = transport.delete_memories(memory_ids=memory_ids)
+    _raise_for_failed_batch_delete_response(response, expected_length=len(memory_ids))
+
+
 def search_memories(
     transport: SupportsMemoryOperationsTransport,
     *,
@@ -131,6 +150,49 @@ def _resolve_batch_create_response(
     )
     batch_results = _build_batch_write_result_items(ordered_results, writes=writes)
     return _resolve_batch_write_outcome(batch_results)
+
+
+def _raise_for_failed_batch_delete_response(
+    response: Any,
+    *,
+    expected_length: int,
+) -> None:
+    if response is None:
+        raise GoodMemAPIError("GoodMem batch_delete did not return a response.")
+
+    results = getattr(response, "results", None)
+    if results is None:
+        raise GoodMemAPIError("GoodMem batch_delete did not return batch results.")
+
+    result_list = list(results)
+    if len(result_list) != expected_length:
+        raise GoodMemAPIError(
+            "GoodMem batch_delete returned a result count that did not match "
+            "the input delete count."
+        )
+
+    failed_indices: list[str] = []
+    failed_messages: list[str] = []
+    for index, result in enumerate(result_list):
+        if getattr(result, "success", False):
+            continue
+        failed_indices.append(str(index))
+        error = getattr(result, "error", None)
+        message = getattr(error, "message", None)
+        if isinstance(message, str) and message:
+            failed_messages.append(message)
+
+    if not failed_indices:
+        return
+
+    index_list = ", ".join(failed_indices)
+    if len(failed_indices) == 1:
+        detail = f"GoodMem failed to delete memory at index {index_list}"
+    else:
+        detail = f"GoodMem failed to delete memories at indices {index_list}"
+    if failed_messages:
+        detail = f"{detail}: {'; '.join(failed_messages)}"
+    raise GoodMemAPIError(f"{detail}.")
 
 
 def _collect_search_hits(

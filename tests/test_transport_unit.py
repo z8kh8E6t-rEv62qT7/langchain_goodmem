@@ -34,6 +34,7 @@ from langchain_goodmem import (
 )
 from langchain_goodmem._internal.types import (
     GoodMemEmbedderBootstrapRequest,
+    GoodMemMemoryCreateRequest,
     GoodMemSpaceCreateRequest,
 )
 from langchain_goodmem._internal.transport import (
@@ -89,12 +90,38 @@ class FakeMemoriesClient:
     def __init__(
         self,
         *,
+        response: Any = None,
         stream: FakeRetrieveStream | None = None,
         retrieve_exception: Exception | None = None,
     ) -> None:
+        self.response = response
         self.stream = stream
         self.retrieve_exception = retrieve_exception
+        self.create_calls: list[dict[str, Any]] = []
+        self.get_calls: list[dict[str, Any]] = []
+        self.list_calls: list[dict[str, Any]] = []
+        self.delete_calls: list[dict[str, Any]] = []
+        self.batch_delete_calls: list[dict[str, Any]] = []
         self.retrieve_calls: list[dict[str, Any]] = []
+
+    def create(self, **kwargs: Any) -> Any:
+        self.create_calls.append(kwargs)
+        return self.response
+
+    def get(self, **kwargs: Any) -> Any:
+        self.get_calls.append(kwargs)
+        return self.response
+
+    def list(self, **kwargs: Any) -> list[Any]:
+        self.list_calls.append(kwargs)
+        return [self.response]
+
+    def delete(self, **kwargs: Any) -> None:
+        self.delete_calls.append(kwargs)
+
+    def batch_delete(self, **kwargs: Any) -> Any:
+        self.batch_delete_calls.append(kwargs)
+        return self.response
 
     def retrieve(self, **kwargs: Any) -> FakeRetrieveStream:
         self.retrieve_calls.append(kwargs)
@@ -107,10 +134,24 @@ class FakeMemoriesClient:
 class FakeSpacesClient:
     def __init__(self) -> None:
         self.create_calls: list[dict[str, Any]] = []
+        self.get_calls: list[dict[str, Any]] = []
+        self.list_calls: list[dict[str, Any]] = []
+        self.delete_calls: list[dict[str, Any]] = []
 
     def create(self, **kwargs: Any) -> dict[str, Any]:
         self.create_calls.append(kwargs)
         return {"space_id": "space-123"}
+
+    def get(self, **kwargs: Any) -> dict[str, Any]:
+        self.get_calls.append(kwargs)
+        return {"space_id": "space-123"}
+
+    def list(self, **kwargs: Any) -> list[dict[str, str]]:
+        self.list_calls.append(kwargs)
+        return [{"space_id": "space-123"}]
+
+    def delete(self, **kwargs: Any) -> None:
+        self.delete_calls.append(kwargs)
 
 
 class FakeClient:
@@ -149,12 +190,36 @@ class ErroringSpacesClient:
     def create(self, **kwargs: Any) -> Any:
         raise self.exc
 
+    def get(self, **kwargs: Any) -> Any:
+        raise self.exc
+
+    def list(self, **kwargs: Any) -> Any:
+        raise self.exc
+
+    def delete(self, **kwargs: Any) -> Any:
+        raise self.exc
+
 
 class ErroringMemoriesClient:
     def __init__(self, exc: Exception) -> None:
         self.exc = exc
 
     def batch_create(self, **kwargs: Any) -> Any:
+        raise self.exc
+
+    def create(self, **kwargs: Any) -> Any:
+        raise self.exc
+
+    def get(self, **kwargs: Any) -> Any:
+        raise self.exc
+
+    def list(self, **kwargs: Any) -> Any:
+        raise self.exc
+
+    def delete(self, **kwargs: Any) -> Any:
+        raise self.exc
+
+    def batch_delete(self, **kwargs: Any) -> Any:
         raise self.exc
 
 
@@ -171,25 +236,32 @@ class ErroringEmbeddersClient:
     def create(self, **kwargs: Any) -> Any:
         raise self.exc
 
+    def delete(self, **kwargs: Any) -> Any:
+        raise self.exc
+
 
 class FakeEmbeddersClient:
     def __init__(self, response: Any) -> None:
         self.response = response
         self.calls: list[dict[str, Any]] = []
-        self.list_calls: int = 0
+        self.list_calls: list[dict[str, Any]] = []
         self.create_calls: list[dict[str, Any]] = []
+        self.delete_calls: list[dict[str, Any]] = []
 
     def get(self, **kwargs: Any) -> Any:
         self.calls.append(kwargs)
         return self.response
 
     def list(self, **kwargs: Any) -> Any:
-        self.list_calls += 1
+        self.list_calls.append(kwargs)
         return [self.response]
 
     def create(self, **kwargs: Any) -> Any:
         self.create_calls.append(kwargs)
         return self.response
+
+    def delete(self, **kwargs: Any) -> None:
+        self.delete_calls.append(kwargs)
 
 
 def test_create_space_maps_package_owned_embedder_config_to_sdk_types() -> None:
@@ -216,9 +288,87 @@ def test_create_space_maps_package_owned_embedder_config_to_sdk_types() -> None:
     assert len(spaces.create_calls) == 1
     create_call = spaces.create_calls[0]
     assert create_call["name"] == "docs-space"
+    assert create_call["labels"] is None
     embedder = create_call["space_embedders"][0]
     assert getattr(embedder, "embedder_id") == "embedder-123"
     assert getattr(embedder, "default_retrieval_weight") == 0.5
+
+
+def test_space_resource_methods_map_to_sdk_calls() -> None:
+    transport = GoodMemTransport.__new__(GoodMemTransport)
+    transport._api_error_type = APIError
+    transport._conflict_error_type = ConflictError
+    transport._goodmem_error_type = GoodMemError
+    spaces = FakeSpacesClient()
+    transport._client = FakeClient(FakeMemoriesClient(), spaces=spaces)
+
+    assert transport.get_space(space_id="space-123") == {"space_id": "space-123"}
+    assert transport.list_spaces(
+        label={"env": "test"},
+        name_filter="demo*",
+        max_items=3,
+    ) == [{"space_id": "space-123"}]
+    assert transport.delete_space(space_id="space-123") is None
+
+    assert spaces.get_calls == [{"id": "space-123"}]
+    assert spaces.list_calls == [
+        {
+            "label": {"env": "test"},
+            "name_filter": "demo*",
+            "max_items": 3,
+        }
+    ]
+    assert spaces.delete_calls == [{"id": "space-123"}]
+
+
+def test_memory_resource_methods_map_to_sdk_calls() -> None:
+    response = object()
+    memories = FakeMemoriesClient(response=response)
+    transport = GoodMemTransport.__new__(GoodMemTransport)
+    transport._api_error_type = APIError
+    transport._conflict_error_type = ConflictError
+    transport._goodmem_error_type = GoodMemError
+    transport._client = FakeClient(memories)
+
+    assert transport.create_memory(
+        GoodMemMemoryCreateRequest(
+            space_id="space-123",
+            content="hello",
+            metadata={"topic": "docs"},
+            memory_id="memory-1",
+        )
+    ) is response
+    assert transport.get_memory(memory_id="memory-1", include_content=True) is response
+    assert transport.list_memories(
+        space_id="space-123",
+        filter_expression="val('$.topic') = 'docs'",
+        max_items=2,
+    ) == [response]
+    assert transport.delete_memory(memory_id="memory-1") is None
+    assert transport.delete_memories(memory_ids=["memory-1", "memory-2"]) is response
+
+    assert memories.create_calls == [
+        {
+            "space_id": "space-123",
+            "original_content": "hello",
+            "metadata": {"topic": "docs"},
+            "memory_id": "memory-1",
+        }
+    ]
+    assert memories.get_calls == [{"id": "memory-1", "include_content": True}]
+    assert memories.list_calls == [
+        {
+            "space_id": "space-123",
+            "filter": "val('$.topic') = 'docs'",
+            "max_items": 2,
+        }
+    ]
+    assert memories.delete_calls == [{"id": "memory-1"}]
+    selectors = memories.batch_delete_calls[0]["requests"]
+    assert [getattr(selector, "memory_id") for selector in selectors] == [
+        "memory-1",
+        "memory-2",
+    ]
 
 
 def test_constructor_builds_sdk_client_from_connection(
@@ -655,7 +805,42 @@ def test_list_embedders_successfully_returns_sdk_response() -> None:
     transport._client = SimpleNamespace(embedders=embedders)
 
     assert transport.list_embedders() == [response]
-    assert embedders.list_calls == 1
+    assert embedders.list_calls == [{}]
+
+
+def test_list_embedders_forwards_resource_filters() -> None:
+    response = object()
+    embedders = FakeEmbeddersClient(response)
+    transport = GoodMemTransport.__new__(GoodMemTransport)
+    transport._api_error_type = APIError
+    transport._conflict_error_type = ConflictError
+    transport._goodmem_error_type = GoodMemError
+    transport._client = SimpleNamespace(embedders=embedders)
+
+    assert transport.list_embedders(
+        label={"env": "test"},
+        owner_id="owner-1",
+        provider_type="OPENAI",
+    ) == [response]
+
+    call = embedders.list_calls[0]
+    assert call["label"] == {"env": "test"}
+    assert call["owner_id"] == "owner-1"
+    assert getattr(call["provider_type"], "value", call["provider_type"]) == "OPENAI"
+
+
+def test_delete_embedder_maps_to_sdk_call() -> None:
+    response = object()
+    embedders = FakeEmbeddersClient(response)
+    transport = GoodMemTransport.__new__(GoodMemTransport)
+    transport._api_error_type = APIError
+    transport._conflict_error_type = ConflictError
+    transport._goodmem_error_type = GoodMemError
+    transport._client = SimpleNamespace(embedders=embedders)
+
+    assert transport.delete_embedder(embedder_id="embedder-123") is None
+
+    assert embedders.delete_calls == [{"id": "embedder-123"}]
 
 
 def test_create_embedder_maps_bootstrap_request_to_sdk_types() -> None:
@@ -740,6 +925,57 @@ def test_bootstrap_embedder_transport_normalizes_backend_failures(
     transport._client = SimpleNamespace(embedders=ErroringEmbeddersClient(exc))
 
     with pytest.raises(expected_type, match=match):
+        call(transport)
+
+
+@pytest.mark.parametrize(
+    ("client_attr", "client", "call", "match"),
+    [
+        (
+            "spaces",
+            ErroringSpacesClient(APIError("HTTP 500: space boom", status_code=500, body="space boom")),
+            lambda transport: transport.get_space(space_id="space-123"),
+            "status 500: space boom",
+        ),
+        (
+            "spaces",
+            ErroringSpacesClient(GoodMemError("space backend boom")),
+            lambda transport: transport.delete_space(space_id="space-123"),
+            "space backend boom",
+        ),
+        (
+            "memories",
+            ErroringMemoriesClient(APIError("HTTP 500: memory boom", status_code=500, body="memory boom")),
+            lambda transport: transport.get_memory(memory_id="memory-1"),
+            "status 500: memory boom",
+        ),
+        (
+            "memories",
+            ErroringMemoriesClient(RuntimeError("memory runtime boom")),
+            lambda transport: transport.delete_memories(memory_ids=["memory-1"]),
+            "memory runtime boom",
+        ),
+        (
+            "embedders",
+            ErroringEmbeddersClient(APIError("HTTP 500: embedder boom", status_code=500, body="embedder boom")),
+            lambda transport: transport.delete_embedder(embedder_id="embedder-123"),
+            "status 500: embedder boom",
+        ),
+    ],
+)
+def test_resource_transport_methods_normalize_backend_failures(
+    client_attr: str,
+    client: object,
+    call: Any,
+    match: str,
+) -> None:
+    transport = GoodMemTransport.__new__(GoodMemTransport)
+    transport._api_error_type = APIError
+    transport._conflict_error_type = ConflictError
+    transport._goodmem_error_type = GoodMemError
+    transport._client = SimpleNamespace(**{client_attr: client})
+
+    with pytest.raises(GoodMemAPIError, match=match):
         call(transport)
 
 

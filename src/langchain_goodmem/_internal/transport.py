@@ -22,6 +22,7 @@ from ..connection import GoodMemConnection
 from ..errors import GoodMemAPIError, GoodMemConfigurationError, GoodMemDuplicateIDError
 from .types import (
     GoodMemEmbedderBootstrapRequest,
+    GoodMemMemoryCreateRequest,
     GoodMemSpaceCreateRequest,
     GoodMemWriteRequest,
 )
@@ -59,6 +60,20 @@ class GoodMemTransport:
             verify=connection.verify,
         )
 
+    def _raise_backend_error(
+        self,
+        exc: Exception,
+        *,
+        duplicate_message: str | None = None,
+    ) -> None:
+        if duplicate_message is not None and isinstance(exc, self._conflict_error_type):
+            raise GoodMemDuplicateIDError(duplicate_message) from exc
+        if isinstance(exc, self._api_error_type):
+            raise _normalize_sdk_api_error(exc) from exc
+        if isinstance(exc, self._goodmem_error_type):
+            raise GoodMemAPIError(_describe_generic_backend_failure(exc)) from exc
+        raise GoodMemAPIError(_describe_generic_backend_failure(exc)) from exc
+
     def create_space(self, request: GoodMemSpaceCreateRequest) -> Any:
         """Create a GoodMem space from one normalized request payload.
 
@@ -79,6 +94,7 @@ class GoodMemTransport:
         try:
             return self._client.spaces.create(
                 name=request.name,
+                labels=request.labels,
                 space_embedders=[
                     SpaceEmbedderConfig(
                         embedder_id=embedder.embedder_id,
@@ -97,6 +113,40 @@ class GoodMemTransport:
             raise GoodMemAPIError(_describe_generic_backend_failure(exc)) from exc
         except Exception as exc:  # pragma: no cover - defensive SDK guard
             raise GoodMemAPIError(_describe_generic_backend_failure(exc)) from exc
+
+    def get_space(self, *, space_id: str) -> Any:
+        """Load one GoodMem space response by ID."""
+        try:
+            return self._client.spaces.get(id=space_id)
+        except Exception as exc:
+            self._raise_backend_error(exc)
+
+    def list_spaces(
+        self,
+        *,
+        label: dict[str, str] | None = None,
+        name_filter: str | None = None,
+        max_items: int | None = None,
+    ) -> Any:
+        """List GoodMem spaces visible to the current client."""
+        kwargs: dict[str, Any] = {}
+        if label is not None:
+            kwargs["label"] = label
+        if name_filter is not None:
+            kwargs["name_filter"] = name_filter
+        if max_items is not None:
+            kwargs["max_items"] = max_items
+        try:
+            return self._client.spaces.list(**kwargs)
+        except Exception as exc:
+            self._raise_backend_error(exc)
+
+    def delete_space(self, *, space_id: str) -> Any:
+        """Delete one GoodMem space by ID."""
+        try:
+            return self._client.spaces.delete(id=space_id)
+        except Exception as exc:
+            self._raise_backend_error(exc)
 
     def batch_create_memories(
         self,
@@ -208,6 +258,71 @@ class GoodMemTransport:
                 raise
             raise GoodMemAPIError(_describe_generic_backend_failure(exc)) from exc
 
+    def create_memory(self, request: GoodMemMemoryCreateRequest) -> Any:
+        """Create one GoodMem memory from a normalized request."""
+        try:
+            return self._client.memories.create(
+                space_id=request.space_id,
+                original_content=request.content,
+                metadata=request.metadata or None,
+                memory_id=request.memory_id,
+            )
+        except self._conflict_error_type as exc:
+            raise GoodMemDuplicateIDError(
+                "GoodMem reported that the memory ID already exists."
+            ) from exc
+        except Exception as exc:
+            self._raise_backend_error(exc)
+
+    def get_memory(self, *, memory_id: str, include_content: bool = False) -> Any:
+        """Load one GoodMem memory response by ID."""
+        try:
+            return self._client.memories.get(
+                id=memory_id,
+                include_content=include_content,
+            )
+        except Exception as exc:
+            self._raise_backend_error(exc)
+
+    def list_memories(
+        self,
+        *,
+        space_id: str,
+        filter_expression: str | None = None,
+        max_items: int | None = None,
+    ) -> Any:
+        """List GoodMem memories in one space."""
+        kwargs: dict[str, Any] = {"space_id": space_id}
+        if filter_expression is not None:
+            kwargs["filter"] = filter_expression
+        if max_items is not None:
+            kwargs["max_items"] = max_items
+        try:
+            return self._client.memories.list(**kwargs)
+        except Exception as exc:
+            self._raise_backend_error(exc)
+
+    def delete_memory(self, *, memory_id: str) -> Any:
+        """Delete one GoodMem memory by ID."""
+        try:
+            return self._client.memories.delete(id=memory_id)
+        except Exception as exc:
+            self._raise_backend_error(exc)
+
+    def delete_memories(self, *, memory_ids: list[str]) -> Any:
+        """Delete one batch of GoodMem memories by ID."""
+        from goodmem.types import BatchDeleteMemorySelectorRequest
+
+        try:
+            return self._client.memories.batch_delete(
+                requests=[
+                    BatchDeleteMemorySelectorRequest(memory_id=memory_id)
+                    for memory_id in memory_ids
+                ],
+            )
+        except Exception as exc:
+            self._raise_backend_error(exc)
+
     def get_embedder(self, *, embedder_id: str) -> Any:
         """Load one GoodMem embedder response by ID.
 
@@ -230,7 +345,13 @@ class GoodMemTransport:
         except Exception as exc:  # pragma: no cover - defensive SDK guard
             raise GoodMemAPIError(_describe_generic_backend_failure(exc)) from exc
 
-    def list_embedders(self) -> Any:
+    def list_embedders(
+        self,
+        *,
+        label: dict[str, str] | None = None,
+        owner_id: str | None = None,
+        provider_type: str | None = None,
+    ) -> Any:
         """List GoodMem embedders visible to the current client.
 
         Returns:
@@ -240,8 +361,17 @@ class GoodMemTransport:
             GoodMemAPIError: If GoodMem rejects the listing or any other
                 backend failure occurs.
         """
+        from goodmem.types import ProviderType
+
+        kwargs: dict[str, Any] = {}
+        if label is not None:
+            kwargs["label"] = label
+        if owner_id is not None:
+            kwargs["owner_id"] = owner_id
+        if provider_type is not None:
+            kwargs["provider_type"] = ProviderType(provider_type)
         try:
-            return self._client.embedders.list()
+            return self._client.embedders.list(**kwargs)
         except self._api_error_type as exc:
             raise _normalize_sdk_api_error(exc) from exc
         except self._goodmem_error_type as exc:
@@ -289,6 +419,13 @@ class GoodMemTransport:
             raise GoodMemAPIError(_describe_generic_backend_failure(exc)) from exc
         except Exception as exc:  # pragma: no cover - defensive SDK guard
             raise GoodMemAPIError(_describe_generic_backend_failure(exc)) from exc
+
+    def delete_embedder(self, *, embedder_id: str) -> Any:
+        """Delete one GoodMem embedder by ID."""
+        try:
+            return self._client.embedders.delete(id=embedder_id)
+        except Exception as exc:
+            self._raise_backend_error(exc)
 
 
 def _normalize_sdk_api_error(exc: Exception) -> GoodMemAPIError:

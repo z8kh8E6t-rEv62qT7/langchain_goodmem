@@ -1,21 +1,19 @@
-"""Clean-slate bootstrap workflow for ``GoodMemEmbeddings.ensure_from_env(...)``.
+"""Clean-slate bootstrap workflow with ``GoodMemResources``.
 
 This example shows how to start from a GoodMem deployment that may not already
 have a suitable embedder configured for LangChain use.
 
-The bootstrap helper keeps the package's LangChain-facing scope intentionally
-narrow:
+The resources facade covers the GoodMem pieces needed by the normal LangChain
+RAG/search path:
 
 - it finds one compatible GoodMem embedder when one already exists
 - it creates one compatible GoodMem embedder when none exists
-- it then returns a normal ``GoodMemEmbeddings`` instance that can be used
-  directly or passed into ``GoodMemVectorStore.create(...)``
+- it creates a space using that embedder
+- it returns a ready-to-use ``GoodMemVectorStore``
 
-This helper is not a general GoodMem resource-management surface. It exists to
-close the clean-slate onboarding gap for the package's ``OPENAI``-compatible
-embeddings workflow. If you set ``GOODMEM_EMBEDDER_ID`` to reuse an existing
-embedder, keep the bootstrap environment below present and aligned with that
-embedder so configuration drift is rejected explicitly.
+This helper is not a full GoodMem admin surface. API keys, server init,
+migrations, system operations, and LLM/reranker/OCR/extension administration
+remain in GoodMem's SDK, CLI, and UI.
 
 Required environment:
 
@@ -45,18 +43,21 @@ from __future__ import annotations
 
 from langchain_core.documents import Document
 
-from langchain_goodmem import GoodMemConnection, GoodMemEmbeddings, GoodMemVectorStore
+from langchain_goodmem import GoodMemResources
 
 
 def main() -> None:
-    connection = GoodMemConnection.from_env()
-    embeddings = GoodMemEmbeddings.ensure_from_env(connection=connection)
-
-    vectorstore = GoodMemVectorStore.create(
-        name="langchain-bootstrap-demo",
-        connection=connection,
-        embedding=embeddings,
+    resources = GoodMemResources.from_env()
+    vectorstore = resources.bootstrap_vector_store(
+        space_name="langchain-bootstrap-demo",
+        endpoint_url=_required_env("GOODMEM_EMBEDDINGS_BASE_URL"),
+        model_identifier=_required_env("GOODMEM_EMBEDDINGS_MODEL_IDENTIFIER"),
+        dimensionality=int(_required_env("GOODMEM_EMBEDDINGS_DIMENSIONS")),
+        upstream_api_key=_optional_env("GOODMEM_EMBEDDINGS_API_KEY"),
     )
+    embeddings = vectorstore.embeddings
+    if embeddings is None:
+        raise RuntimeError("bootstrap_vector_store did not retain embeddings.")
 
     vectorstore.add_documents(
         [
@@ -85,6 +86,23 @@ def main() -> None:
         print("content:", document.page_content)
         print("id:", document.id)
         print("metadata:", document.metadata)
+
+def _required_env(name: str) -> str:
+    import os
+
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        raise RuntimeError(f"{name} must be set.")
+    return value.strip()
+
+
+def _optional_env(name: str) -> str | None:
+    import os
+
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return None
+    return value.strip()
 
 
 if __name__ == "__main__":

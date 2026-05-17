@@ -23,9 +23,9 @@ For clean-slate onboarding, ``GoodMemEmbeddings.ensure(...)`` and
 GoodMem embedder before returning a normal ``GoodMemEmbeddings`` instance.
 ``ensure_from_env(...)`` also supports ``GOODMEM_EMBEDDER_ID`` reuse, but when
 that path is used the bootstrap environment must still be present and must
-match the selected embedder so configuration drift stays explicit. These
-helpers are intentionally narrow bootstrap conveniences rather than a general
-GoodMem resource-management API.
+match the selected embedder so configuration drift stays explicit. For broader
+RAG-resource setup such as spaces, memories, and one-shot vector-store
+bootstrap, use ``GoodMemResources``.
 
 Additional environment support:
 
@@ -111,10 +111,9 @@ class GoodMemEmbeddings(Embeddings):
     ) -> "GoodMemEmbeddings":
         """Find or create one compatible GoodMem embedder and return it.
 
-        This helper keeps the package's narrow LangChain scope intact while
-        still supporting clean-slate onboarding. It does not expose general
-        GoodMem resource CRUD; it only resolves one ``OPENAI``-compatible
-        embedder that can back ``GoodMemEmbeddings``.
+        This helper resolves one ``OPENAI``-compatible embedder that can back
+        ``GoodMemEmbeddings``. Use ``GoodMemResources`` when you also need to
+        manage spaces, memories, or one-shot vector-store bootstrap.
 
         Args:
             connection: Shared GoodMem transport configuration.
