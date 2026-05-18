@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1
+
+- Added Ruff-based static quality checks to the project configuration and CI /
+  release verification workflow.
+- Refined the GitHub-facing docs and guides, including a clearer examples entry
+  point and a shorter README.
+- Added a lightweight repository changelog and linked it from the README for
+  easier GitHub browsing.
+
 ## 0.2.0
 
 - Added `GoodMemResources` to cover the GoodMem resource workflow around normal
