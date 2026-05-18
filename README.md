@@ -10,3 +10,4 @@ LangChain `Embeddings` object.
 
 - [Hosted docs](https://z8kh8E6t-rEv62qT7.github.io/langchain_goodmem/)
 - [Docs maintenance guide](docs/README.md)
+- [Changelog](CHANGELOG.md)

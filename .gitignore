@@ -9,3 +9,5 @@ _build/
 local.env
 .DS_Store
 internal.md
+.ruff_cache/
+.pycache/
