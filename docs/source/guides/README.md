@@ -12,6 +12,8 @@ Read these pages in order if you are new to the package:
   spaces, memories, and clean-slate vector-store bootstrap.
 - `Embeddings Workflow` explains when `GoodMemEmbeddings` is necessary and when
   it is not.
+- `Examples` points to the runnable scripts under `examples/` and clarifies
+  which workflow each one demonstrates.
 
 Two cross-cutting rules are worth remembering before you dive in:
 
@@ -28,4 +30,5 @@ existing-space
 create-space
 resources
 embeddings
+examples
 ```
