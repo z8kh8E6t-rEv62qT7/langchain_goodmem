@@ -48,7 +48,8 @@ class GoodMemTransport:
             from goodmem.errors import APIError, ConflictError, GoodMemError
         except ImportError as exc:
             raise GoodMemConfigurationError(
-                "The 'goodmem' dependency is required to use langchain-goodmem integrations."
+                "The 'goodmem' dependency is required to use "
+                "langchain-goodmem integrations."
             ) from exc
 
         self._api_error_type = APIError
@@ -432,11 +433,15 @@ def _normalize_sdk_api_error(exc: Exception) -> GoodMemAPIError:
     """Convert one GoodMem SDK API exception into a package-owned error."""
     status = getattr(exc, "status_code", None)
     if status == 409:
-        return GoodMemDuplicateIDError("GoodMem reported that the resource already exists.")
+        return GoodMemDuplicateIDError(
+            "GoodMem reported that the resource already exists."
+        )
     detail = _sdk_api_error_detail(exc, status=status)
     if status is not None:
         if detail is not None:
-            return GoodMemAPIError(f"GoodMem request failed with status {status}: {detail}")
+            return GoodMemAPIError(
+                f"GoodMem request failed with status {status}: {detail}"
+            )
         return GoodMemAPIError(f"GoodMem request failed with status {status}.")
     if detail is not None:
         return GoodMemAPIError(f"GoodMem request failed: {detail}")

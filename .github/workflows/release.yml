@@ -25,6 +25,12 @@ jobs:
           pip install -e '.[test,docs]'
           pip install build
 
+      - name: Run Ruff lint checks
+        run: ruff check src tests
+
+      - name: Run Ruff format checks
+        run: ruff format --check src tests
+
       - name: Run unit tests
         run: >
           python -m pytest -q

@@ -38,18 +38,22 @@ Additional behavior:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
 import os
 import time
+from dataclasses import dataclass
 
+import pytest
 from goodmem import Goodmem
 from goodmem.errors import ConflictError
 from goodmem.types import Modality, ProviderType, SpaceEmbedderConfig
 from langchain_core.documents import Document
-import pytest
 
-from langchain_goodmem import GoodMemConfigurationError, GoodMemConnection, GoodMemVectorStore
+from langchain_goodmem import (
+    GoodMemConfigurationError,
+    GoodMemConnection,
+    GoodMemVectorStore,
+)
 
 
 @dataclass(frozen=True)
@@ -99,7 +103,9 @@ def embedding_integration_config() -> str | None:
 def embedder_has_inline_api_key(embedder: object) -> bool:
     credentials = getattr(embedder, "credentials", None)
     api_key = getattr(credentials, "api_key", None) if credentials is not None else None
-    inline_secret = getattr(api_key, "inline_secret", None) if api_key is not None else None
+    inline_secret = (
+        getattr(api_key, "inline_secret", None) if api_key is not None else None
+    )
     return isinstance(inline_secret, str) and bool(inline_secret.strip())
 
 
@@ -139,7 +145,10 @@ def ensure_test_embedder(
             and item.dimensionality == dimensionality
         ):
             if provider_api_key:
-                if item.credentials is None or getattr(item.credentials, "api_key", None) is None:
+                if (
+                    item.credentials is None
+                    or getattr(item.credentials, "api_key", None) is None
+                ):
                     continue
             return LiveEmbedderResource(
                 embedder_id=item.embedder_id,
@@ -233,7 +242,9 @@ def cleanup_live_resources(
             )
 
     if cleanup_errors:
-        raise AssertionError("Live integration cleanup failed: " + " | ".join(cleanup_errors))
+        raise AssertionError(
+            "Live integration cleanup failed: " + " | ".join(cleanup_errors)
+        )
 
 
 def poll_similarity_search(

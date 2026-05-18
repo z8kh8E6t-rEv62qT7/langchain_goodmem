@@ -32,9 +32,7 @@ from .types import (
     SupportsEmbedderTransport,
 )
 
-_OPENAI_EXTRA_INSTALL_HINT = (
-    "Install it with `pip install langchain-goodmem[openai]`."
-)
+_OPENAI_EXTRA_INSTALL_HINT = "Install it with `pip install langchain-goodmem[openai]`."
 _DEFAULT_BOOTSTRAP_DISPLAY_NAME = "langchain-goodmem-openai"
 
 
@@ -105,7 +103,10 @@ def create_provider_embeddings(
     except Exception as exc:
         raise GoodMemAPIError(
             format_provider_failure_message(
-                "Failed to initialize the LangChain OpenAI-compatible embeddings provider",
+                (
+                    "Failed to initialize the LangChain OpenAI-compatible "
+                    "embeddings provider"
+                ),
                 exc,
             )
         ) from exc
@@ -187,9 +188,7 @@ def validate_bootstrap_request(
     """
     provider_type = _normalize_required_text(
         request.provider_type,
-        error_message=(
-            "GoodMemEmbeddings.ensure requires provider_type to be OPENAI."
-        ),
+        error_message=("GoodMemEmbeddings.ensure requires provider_type to be OPENAI."),
     ).upper()
     if provider_type != "OPENAI":
         raise GoodMemConfigurationError(
@@ -230,19 +229,22 @@ def validate_bootstrap_request(
         display_name=_normalize_required_text(
             request.display_name,
             error_message=(
-                "GoodMemEmbeddings.ensure requires display_name to be a non-empty string."
+                "GoodMemEmbeddings.ensure requires display_name to be a "
+                "non-empty string."
             ),
         ),
         endpoint_url=_normalize_required_text(
             request.endpoint_url,
             error_message=(
-                "GoodMemEmbeddings.ensure requires endpoint_url to be a non-empty string."
+                "GoodMemEmbeddings.ensure requires endpoint_url to be a "
+                "non-empty string."
             ),
         ),
         model_identifier=_normalize_required_text(
             request.model_identifier,
             error_message=(
-                "GoodMemEmbeddings.ensure requires model_identifier to be a non-empty string."
+                "GoodMemEmbeddings.ensure requires model_identifier to be a "
+                "non-empty string."
             ),
         ),
         dimensionality=dimensionality,
@@ -293,7 +295,9 @@ def embedder_matches_bootstrap_request(
         return False
     if embedder.dimensionality != request.dimensionality:
         return False
-    embedder_modalities = {modality.upper() for modality in embedder.supported_modalities}
+    embedder_modalities = {
+        modality.upper() for modality in embedder.supported_modalities
+    }
     return set(request.supported_modalities).issubset(embedder_modalities)
 
 
@@ -430,7 +434,8 @@ def validate_compatible_embedder_config(embedder: GoodMemEmbedderConfig) -> None
         )
     if not embedder.model_identifier.strip():
         raise GoodMemConfigurationError(
-            "GoodMemEmbeddings requires the GoodMem embedder to define model_identifier."
+            "GoodMemEmbeddings requires the GoodMem embedder to define "
+            "model_identifier."
         )
     if not embedder.endpoint_url.strip():
         raise GoodMemConfigurationError(
@@ -438,7 +443,8 @@ def validate_compatible_embedder_config(embedder: GoodMemEmbedderConfig) -> None
         )
     if embedder.dimensionality <= 0:
         raise GoodMemConfigurationError(
-            "GoodMemEmbeddings requires the GoodMem embedder dimensionality to be greater than 0."
+            "GoodMemEmbeddings requires the GoodMem embedder dimensionality "
+            "to be greater than 0."
         )
     api_path = (embedder.api_path or "").strip()
     if api_path and not api_path.endswith("/embeddings"):

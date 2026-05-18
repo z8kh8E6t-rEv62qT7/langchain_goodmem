@@ -115,6 +115,13 @@ pip install -e '.[test]'
 pip install -e '.[docs]'
 ```
 
+Run the static quality checks:
+
+```bash
+./.venv/bin/ruff check src tests
+./.venv/bin/ruff format --check src tests
+```
+
 Rebuild docs:
 
 ```bash

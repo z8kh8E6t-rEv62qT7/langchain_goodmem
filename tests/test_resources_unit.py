@@ -10,8 +10,8 @@ import pytest
 
 from langchain_goodmem import (
     GoodMemAPIError,
-    GoodMemConnection,
     GoodMemConfigurationError,
+    GoodMemConnection,
     GoodMemDuplicateIDError,
     GoodMemEmbedderInfo,
     GoodMemEmbeddings,
@@ -70,7 +70,7 @@ class FakeBatchDeleteResponse:
 class FakeAutoPagingList:
     data: list[Any]
     next_token: str | None = None
-    pages: dict[str, "FakeAutoPagingList"] = field(default_factory=dict)
+    pages: dict[str, FakeAutoPagingList] = field(default_factory=dict)
     fetch_calls: list[str] = field(default_factory=list)
     _max_items: int | None = None
     _response_model: object = field(default_factory=object)
@@ -80,7 +80,7 @@ class FakeAutoPagingList:
     def __post_init__(self) -> None:
         self._fetch_fn = self._fetch_page
 
-    def _fetch_page(self, token: str | None) -> "FakeAutoPagingList":
+    def _fetch_page(self, token: str | None) -> FakeAutoPagingList:
         if token is None:
             raise AssertionError("unexpected empty pagination token")
         self.fetch_calls.append(token)
@@ -164,7 +164,9 @@ class FakeResourceTransport:
         self.create_memory_calls.append(request)
         return self.memory
 
-    def get_memory(self, *, memory_id: str, include_content: bool = False) -> FakeRawMemory:
+    def get_memory(
+        self, *, memory_id: str, include_content: bool = False
+    ) -> FakeRawMemory:
         self.get_memory_calls.append(
             {"memory_id": memory_id, "include_content": include_content}
         )
@@ -332,9 +334,7 @@ def test_memory_resource_methods_return_stable_info() -> None:
         }
     ]
     assert transport.delete_memory_calls == [{"memory_id": "memory-1"}]
-    assert transport.delete_memories_calls == [
-        {"memory_ids": ["memory-1", "memory-2"]}
-    ]
+    assert transport.delete_memories_calls == [{"memory_ids": ["memory-1", "memory-2"]}]
 
 
 def test_from_env_builds_connection_and_transport(
@@ -436,7 +436,9 @@ def test_resource_lists_auto_paginate_sdk_page_like_results() -> None:
         next_token="memories-token-2",
         pages={
             "memories-token-2": FakeAutoPagingList(
-                data=[FakeRawMemory(memory_id="memory-2", original_content="hello again")],
+                data=[
+                    FakeRawMemory(memory_id="memory-2", original_content="hello again")
+                ],
             )
         },
         fetch_calls=memory_fetch_calls,
@@ -536,10 +538,14 @@ def test_resource_methods_validate_local_inputs_before_transport_calls() -> None
             dimensionality=0,
         )
 
-    with pytest.raises(GoodMemConfigurationError, match="either embedders or embedding"):
+    with pytest.raises(
+        GoodMemConfigurationError, match="either embedders or embedding"
+    ):
         resources.create_space(name="docs")
 
-    with pytest.raises(GoodMemConfigurationError, match="either embedders or embedding"):
+    with pytest.raises(
+        GoodMemConfigurationError, match="either embedders or embedding"
+    ):
         resources.create_space(
             name="docs",
             embedders=[GoodMemSpaceEmbedder(embedder_id="embedder-1")],

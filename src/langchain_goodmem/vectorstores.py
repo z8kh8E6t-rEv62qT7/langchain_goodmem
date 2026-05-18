@@ -147,7 +147,7 @@ class GoodMemVectorStore(VectorStore):
         embedders: list[GoodMemSpaceEmbedder] | None = None,
         connection: GoodMemConnection,
         embedding: GoodMemEmbeddings | None = None,
-    ) -> "GoodMemVectorStore":
+    ) -> GoodMemVectorStore:
         """Create a new GoodMem space and return a bound vector store.
 
         Exactly one create-time embedder source is allowed:
@@ -301,7 +301,9 @@ class GoodMemVectorStore(VectorStore):
         """
         raise_for_unexpected_kwargs("GoodMemVectorStore.add_texts", kwargs)
         if isinstance(texts, str):
-            raise ValueError("texts must be an iterable of strings, not a single string.")
+            raise ValueError(
+                "texts must be an iterable of strings, not a single string."
+            )
 
         texts_list = list(texts)
         if not texts_list:
@@ -412,8 +414,7 @@ class GoodMemVectorStore(VectorStore):
             filter_expression=filter,
         )
         return [
-            (_document_from_hit(hit, include_score=True), hit.score)
-            for hit in hits
+            (_document_from_hit(hit, include_score=True), hit.score) for hit in hits
         ]
 
     def delete(self, ids: list[str] | None = None, **kwargs: Any) -> bool:
@@ -483,7 +484,7 @@ class GoodMemVectorStore(VectorStore):
         space_id: str,
         ids: list[str | None] | None = None,
         **kwargs: Any,
-    ) -> "GoodMemVectorStore":
+    ) -> GoodMemVectorStore:
         """Write texts into an existing GoodMem space and return a bound store.
 
         This compatibility helper matches the LangChain ``VectorStore``
@@ -550,7 +551,7 @@ class GoodMemVectorStore(VectorStore):
         space_id: str,
         embedding: Embeddings | None,
         transport: SupportsMemoryOperationsTransport,
-    ) -> "GoodMemVectorStore":
+    ) -> GoodMemVectorStore:
         store = cls.__new__(cls)
         store._initialize(
             space_id=space_id,
@@ -603,7 +604,8 @@ def _resolve_create_embedding_inputs(
         )
     if not isinstance(embedding, GoodMemEmbeddings):
         raise GoodMemConfigurationError(
-            "GoodMemVectorStore.create(embedding=...) requires a GoodMemEmbeddings instance."
+            "GoodMemVectorStore.create(embedding=...) requires a "
+            "GoodMemEmbeddings instance."
         )
     return [GoodMemSpaceEmbedder(embedder_id=embedding.embedder_id)], embedding
 

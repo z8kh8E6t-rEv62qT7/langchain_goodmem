@@ -24,6 +24,12 @@ jobs:
       - name: Install test dependencies
         run: pip install -e '.[test]'
 
+      - name: Run Ruff lint checks
+        run: ruff check src tests
+
+      - name: Run Ruff format checks
+        run: ruff format --check src tests
+
       - name: Run unit tests with coverage
         run: >
           coverage run --source=langchain_goodmem -m pytest -q

@@ -106,11 +106,15 @@ class FakeTransport:
             raise self.exception
         return list(self.embedders)
 
-    def create_embedder(self, request: GoodMemEmbedderBootstrapRequest) -> FakeRawEmbedder:
+    def create_embedder(
+        self, request: GoodMemEmbedderBootstrapRequest
+    ) -> FakeRawEmbedder:
         self.create_calls.append(request)
         if self.exception is not None:
             raise self.exception
-        response = self.create_response or FakeRawEmbedder(embedder_id="created-embedder")
+        response = self.create_response or FakeRawEmbedder(
+            embedder_id="created-embedder"
+        )
         self.embedder = response
         return response
 
@@ -183,7 +187,9 @@ def test_embed_query_uses_connection_and_caches_provider(
         fake_openai_embeddings,
     )
 
-    embeddings = GoodMemEmbeddings(embedder_id=" embedder-123 ", connection=_connection())
+    embeddings = GoodMemEmbeddings(
+        embedder_id=" embedder-123 ", connection=_connection()
+    )
 
     assert embeddings.embed_query("hello") == [0.1, 0.2]
     assert embeddings.embed_query("again") == [0.1, 0.2]
@@ -325,7 +331,10 @@ def test_api_key_credentials_without_inline_secret_require_env_fallback(
 
     with pytest.raises(
         GoodMemConfigurationError,
-        match="uses API-key credentials, but GoodMem did not expose a readable inline secret",
+        match=(
+            "uses API-key credentials, but GoodMem did not expose "
+            "a readable inline secret"
+        ),
     ):
         embeddings.embed_query("hello")
 

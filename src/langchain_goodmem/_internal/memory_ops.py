@@ -316,7 +316,9 @@ def _resolve_created_memory_id(
     if memory_id is None:
         memory_id = result.memory_id or write.memory_id
     if memory_id is None:
-        raise GoodMemAPIError("GoodMem created a memory but did not return a memory ID.")
+        raise GoodMemAPIError(
+            "GoodMem created a memory but did not return a memory ID."
+        )
     return memory_id
 
 
@@ -326,13 +328,17 @@ def _resolve_batch_write_outcome(
     created_ids = [result.memory_id for result in results if result.success]
     failure_results = [result for result in results if not result.success]
     assert all(memory_id is not None for memory_id in created_ids)
-    resolved_created_ids = [memory_id for memory_id in created_ids if memory_id is not None]
+    resolved_created_ids = [
+        memory_id for memory_id in created_ids if memory_id is not None
+    ]
 
     if not failure_results:
         return resolved_created_ids
 
     if resolved_created_ids:
-        failure_indices = ", ".join(str(result.request_index) for result in failure_results)
+        failure_indices = ", ".join(
+            str(result.request_index) for result in failure_results
+        )
         raise GoodMemBatchPartialFailureError(
             "GoodMem batch_create partially succeeded; failed input indices: "
             f"{failure_indices}. Inspect created_ids and results on "
@@ -349,7 +355,9 @@ def _resolve_batch_write_outcome(
                 "memory ID already exists."
             )
 
-        failure_indices = ", ".join(str(result.request_index) for result in failure_results)
+        failure_indices = ", ".join(
+            str(result.request_index) for result in failure_results
+        )
         raise GoodMemDuplicateIDError(
             "GoodMem rejected memories at indices "
             f"{failure_indices} because the memory IDs already exist."

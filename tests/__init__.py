@@ -8,6 +8,13 @@ Set up the local contributor environment once:
     source .venv/bin/activate
     pip install -e '.[test]'
 
+Run the static quality checks with:
+
+::
+
+    ./.venv/bin/ruff check src tests
+    ./.venv/bin/ruff format --check src tests
+
 Run the unit suite with:
 
 ::

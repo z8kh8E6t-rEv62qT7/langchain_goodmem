@@ -22,6 +22,7 @@ test = [
   "coverage>=7,<8",
   "langchain-openai>=1,<2",
   "pytest>=8,<9",
+  "ruff>=0.11,<0.12",
 ]
 docs = [
   "myst-parser>=4,<5",
@@ -38,3 +39,12 @@ markers = [
   "integration: live GoodMem integration tests",
 ]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+src = ["src", "tests"]
+extend-exclude = ["docs/build"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

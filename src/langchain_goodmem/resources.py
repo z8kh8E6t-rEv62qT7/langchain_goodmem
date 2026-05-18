@@ -123,7 +123,7 @@ class GoodMemResources:
         self._transport = _create_transport(connection)
 
     @classmethod
-    def from_env(cls, *, verify: bool | str = True) -> "GoodMemResources":
+    def from_env(cls, *, verify: bool | str = True) -> GoodMemResources:
         """Build a resources facade from ``GOODMEM_API_KEY`` and ``GOODMEM_BASE_URL``.
 
         Args:
@@ -141,7 +141,7 @@ class GoodMemResources:
         *,
         connection: GoodMemConnection,
         transport: SupportsResourceOperationsTransport,
-    ) -> "GoodMemResources":
+    ) -> GoodMemResources:
         resources = cls.__new__(cls)
         resources._connection = connection
         resources._transport = transport
@@ -232,8 +232,7 @@ class GoodMemResources:
             provider_type=_normalize_optional_text(provider_type),
         )
         return [
-            _embedder_info_from_raw(embedder)
-            for embedder in _iter_items(raw_embedders)
+            _embedder_info_from_raw(embedder) for embedder in _iter_items(raw_embedders)
         ]
 
     def delete_embedder(self, embedder_id: str) -> None:
@@ -534,7 +533,8 @@ class GoodMemResources:
         )
         if space.space_id is None:
             raise GoodMemConfigurationError(
-                "GoodMemResources.bootstrap_vector_store could not resolve the created space ID."
+                "GoodMemResources.bootstrap_vector_store could not resolve "
+                "the created space ID."
             )
         return GoodMemVectorStore._from_transport(
             space_id=space.space_id,
@@ -550,7 +550,8 @@ def _resolve_space_embedders(
 ) -> list[GoodMemSpaceEmbedder]:
     if embedders is not None and embedding is not None:
         raise GoodMemConfigurationError(
-            "GoodMemResources.create_space accepts either embedders or embedding, not both."
+            "GoodMemResources.create_space accepts either embedders or "
+            "embedding, not both."
         )
     if embedders is not None:
         return normalize_space_embedders(embedders)
@@ -560,7 +561,8 @@ def _resolve_space_embedders(
         )
     if not isinstance(embedding, GoodMemEmbeddings):
         raise GoodMemConfigurationError(
-            "GoodMemResources.create_space(embedding=...) requires a GoodMemEmbeddings instance."
+            "GoodMemResources.create_space(embedding=...) requires a "
+            "GoodMemEmbeddings instance."
         )
     return [GoodMemSpaceEmbedder(embedder_id=embedding.embedder_id)]
 
@@ -624,7 +626,7 @@ def _iter_items(raw_items: Any) -> list[Any]:
     data = getattr(raw_items, "data", None)
     if data is not None:
         return list(data)
-    if isinstance(raw_items, (str, bytes, dict)):
+    if isinstance(raw_items, str | bytes | dict):
         return [raw_items]
     try:
         return list(raw_items)
@@ -637,7 +639,13 @@ def _is_auto_paging_sdk_list(raw_items: Any) -> bool:
         return False
     return all(
         hasattr(raw_items, attr)
-        for attr in ("data", "next_token", "_fetch_fn", "_response_model", "_items_field")
+        for attr in (
+            "data",
+            "next_token",
+            "_fetch_fn",
+            "_response_model",
+            "_items_field",
+        )
     )
 
 
@@ -699,7 +707,9 @@ def _normalize_optional_positive_int(value: Any, field_name: str) -> int | None:
     return _require_positive_int(value, field_name)
 
 
-def _normalize_optional_labels(labels: Mapping[str, str] | None) -> dict[str, str] | None:
+def _normalize_optional_labels(
+    labels: Mapping[str, str] | None,
+) -> dict[str, str] | None:
     if labels is None:
         return None
     if not isinstance(labels, Mapping):

@@ -16,8 +16,8 @@ explicitly when you need a custom TLS setting.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 
 from ._internal.validators import require_non_empty_trimmed_string, require_verify_value
 from .errors import GoodMemConfigurationError
@@ -70,7 +70,7 @@ class GoodMemConnection:
         object.__setattr__(self, "verify", require_verify_value(self.verify))
 
     @classmethod
-    def from_env(cls, *, verify: bool | str = True) -> "GoodMemConnection":
+    def from_env(cls, *, verify: bool | str = True) -> GoodMemConnection:
         """Build a connection from GoodMem process environment variables.
 
         Args:

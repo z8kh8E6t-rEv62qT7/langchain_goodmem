@@ -19,8 +19,8 @@ SDK interaction rather than on public LangChain-facing behavior.
 from __future__ import annotations
 
 import builtins
-from typing import Any
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from goodmem.errors import APIError, ConflictError, GoodMemError
@@ -32,15 +32,15 @@ from langchain_goodmem import (
     GoodMemDuplicateIDError,
     GoodMemSpaceEmbedder,
 )
-from langchain_goodmem._internal.types import (
-    GoodMemEmbedderBootstrapRequest,
-    GoodMemMemoryCreateRequest,
-    GoodMemSpaceCreateRequest,
-)
 from langchain_goodmem._internal.transport import (
     GoodMemTransport,
     _describe_generic_backend_failure,
     _normalize_sdk_api_error,
+)
+from langchain_goodmem._internal.types import (
+    GoodMemEmbedderBootstrapRequest,
+    GoodMemMemoryCreateRequest,
+    GoodMemSpaceCreateRequest,
 )
 
 
@@ -65,7 +65,9 @@ class FakeRetrieveStream:
         self.exit_exception = exit_exception
         self.enter_calls = 0
         self.exit_calls = 0
-        self.exit_args: list[tuple[type[BaseException] | None, BaseException | None]] = []
+        self.exit_args: list[
+            tuple[type[BaseException] | None, BaseException | None]
+        ] = []
 
     def __enter__(self) -> Any:
         self.enter_calls += 1
@@ -290,8 +292,8 @@ def test_create_space_maps_package_owned_embedder_config_to_sdk_types() -> None:
     assert create_call["name"] == "docs-space"
     assert create_call["labels"] is None
     embedder = create_call["space_embedders"][0]
-    assert getattr(embedder, "embedder_id") == "embedder-123"
-    assert getattr(embedder, "default_retrieval_weight") == 0.5
+    assert embedder.embedder_id == "embedder-123"
+    assert embedder.default_retrieval_weight == 0.5
 
 
 def test_space_resource_methods_map_to_sdk_calls() -> None:
@@ -330,14 +332,17 @@ def test_memory_resource_methods_map_to_sdk_calls() -> None:
     transport._goodmem_error_type = GoodMemError
     transport._client = FakeClient(memories)
 
-    assert transport.create_memory(
-        GoodMemMemoryCreateRequest(
-            space_id="space-123",
-            content="hello",
-            metadata={"topic": "docs"},
-            memory_id="memory-1",
+    assert (
+        transport.create_memory(
+            GoodMemMemoryCreateRequest(
+                space_id="space-123",
+                content="hello",
+                metadata={"topic": "docs"},
+                memory_id="memory-1",
+            )
         )
-    ) is response
+        is response
+    )
     assert transport.get_memory(memory_id="memory-1", include_content=True) is response
     assert transport.list_memories(
         space_id="space-123",
@@ -365,7 +370,7 @@ def test_memory_resource_methods_map_to_sdk_calls() -> None:
     ]
     assert memories.delete_calls == [{"id": "memory-1"}]
     selectors = memories.batch_delete_calls[0]["requests"]
-    assert [getattr(selector, "memory_id") for selector in selectors] == [
+    assert [selector.memory_id for selector in selectors] == [
         "memory-1",
         "memory-2",
     ]
@@ -635,8 +640,8 @@ def test_retrieve_memories_preserves_consumer_exceptions() -> None:
     assert retrieve_call["fetch_memory_content"] is False
     assert retrieve_call["stream"] is True
     space_key = retrieve_call["space_keys"][0]
-    assert getattr(space_key, "space_id") == "space-123"
-    assert getattr(space_key, "filter") == "topic = 'docs'"
+    assert space_key.space_id == "space-123"
+    assert space_key.filter == "topic = 'docs'"
     assert stream.enter_calls == 1
     assert stream.exit_calls == 1
     exit_type, exit_exc = stream.exit_args[0]
@@ -869,7 +874,10 @@ def test_create_embedder_maps_bootstrap_request_to_sdk_types() -> None:
     assert create_call["endpoint_url"] == "https://embeddings.example"
     assert create_call["model_identifier"] == "text-embedding-3-large"
     assert create_call["dimensionality"] == 1024
-    assert getattr(create_call["provider_type"], "value", create_call["provider_type"]) == "OPENAI"
+    assert (
+        getattr(create_call["provider_type"], "value", create_call["provider_type"])
+        == "OPENAI"
+    )
     supported_modalities = create_call["supported_modalities"]
     assert len(supported_modalities) == 1
     assert getattr(supported_modalities[0], "value", supported_modalities[0]) == "TEXT"
@@ -881,7 +889,9 @@ def test_get_embedder_normalizes_generic_failures_without_message() -> None:
     transport._api_error_type = APIError
     transport._conflict_error_type = ConflictError
     transport._goodmem_error_type = GoodMemError
-    transport._client = SimpleNamespace(embedders=ErroringEmbeddersClient(RuntimeError("")))
+    transport._client = SimpleNamespace(
+        embedders=ErroringEmbeddersClient(RuntimeError(""))
+    )
 
     with pytest.raises(GoodMemAPIError, match="GoodMem request failed\\.$"):
         transport.get_embedder(embedder_id="embedder-123")
@@ -933,7 +943,9 @@ def test_bootstrap_embedder_transport_normalizes_backend_failures(
     [
         (
             "spaces",
-            ErroringSpacesClient(APIError("HTTP 500: space boom", status_code=500, body="space boom")),
+            ErroringSpacesClient(
+                APIError("HTTP 500: space boom", status_code=500, body="space boom")
+            ),
             lambda transport: transport.get_space(space_id="space-123"),
             "status 500: space boom",
         ),
@@ -945,7 +957,9 @@ def test_bootstrap_embedder_transport_normalizes_backend_failures(
         ),
         (
             "memories",
-            ErroringMemoriesClient(APIError("HTTP 500: memory boom", status_code=500, body="memory boom")),
+            ErroringMemoriesClient(
+                APIError("HTTP 500: memory boom", status_code=500, body="memory boom")
+            ),
             lambda transport: transport.get_memory(memory_id="memory-1"),
             "status 500: memory boom",
         ),
@@ -957,7 +971,11 @@ def test_bootstrap_embedder_transport_normalizes_backend_failures(
         ),
         (
             "embedders",
-            ErroringEmbeddersClient(APIError("HTTP 500: embedder boom", status_code=500, body="embedder boom")),
+            ErroringEmbeddersClient(
+                APIError(
+                    "HTTP 500: embedder boom", status_code=500, body="embedder boom"
+                )
+            ),
             lambda transport: transport.delete_embedder(embedder_id="embedder-123"),
             "status 500: embedder boom",
         ),
@@ -987,7 +1005,9 @@ def test_create_embedder_maps_conflict_to_duplicate_error() -> None:
     transport._goodmem_error_type = GoodMemError
     transport._client = SimpleNamespace(embedders=ErroringEmbeddersClient(exc))
 
-    with pytest.raises(GoodMemDuplicateIDError, match="requested embedder already exists"):
+    with pytest.raises(
+        GoodMemDuplicateIDError, match="requested embedder already exists"
+    ):
         transport.create_embedder(
             GoodMemEmbedderBootstrapRequest(
                 display_name="langchain-goodmem-openai",

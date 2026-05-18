@@ -288,7 +288,7 @@ def test_create_returns_bound_store_and_records_space_request(
                     memory_id="memory-1",
                 )
             ]
-        )
+        ),
     )
     connections = _patch_transports(monkeypatch, transport)
     connection = _connection()
@@ -407,9 +407,7 @@ def test_create_infers_space_embedder_from_goodmem_embeddings(
     assert transport.create_calls == [
         {
             "name": "docs-space",
-            "space_embedders": [
-                GoodMemSpaceEmbedder(embedder_id="embedder-123")
-            ],
+            "space_embedders": [GoodMemSpaceEmbedder(embedder_id="embedder-123")],
         }
     ]
     assert store.space_id == "created-space"
@@ -456,8 +454,12 @@ def test_from_texts_builds_store_and_writes(
     transport = FakeTransport(
         batch_response=FakeBatchMemoryResponse(
             results=[
-                FakeBatchMemoryResult(success=True, request_index=0, memory_id="memory-1"),
-                FakeBatchMemoryResult(success=True, request_index=1, memory_id="memory-2"),
+                FakeBatchMemoryResult(
+                    success=True, request_index=0, memory_id="memory-1"
+                ),
+                FakeBatchMemoryResult(
+                    success=True, request_index=1, memory_id="memory-2"
+                ),
             ]
         )
     )
@@ -502,7 +504,9 @@ def test_add_documents_maps_metadata_and_document_ids(
         batch_response=FakeBatchMemoryResponse(
             results=[
                 FakeBatchMemoryResult(success=True, request_index=0, memory_id="doc-1"),
-                FakeBatchMemoryResult(success=True, request_index=1, memory_id="generated-2"),
+                FakeBatchMemoryResult(
+                    success=True, request_index=1, memory_id="generated-2"
+                ),
             ]
         )
     )
@@ -544,7 +548,9 @@ def test_add_documents_accepts_backend_results_without_request_index(
     transport = FakeTransport(
         batch_response=FakeBatchMemoryResponse(
             results=[
-                FakeBatchMemoryResult(success=True, request_index=None, memory_id="doc-1"),
+                FakeBatchMemoryResult(
+                    success=True, request_index=None, memory_id="doc-1"
+                ),
                 FakeBatchMemoryResult(
                     success=True,
                     request_index=None,
@@ -687,8 +693,12 @@ def test_add_texts_rejects_invalid_request_ordering_from_backend(
     transport = FakeTransport(
         batch_response=FakeBatchMemoryResponse(
             results=[
-                FakeBatchMemoryResult(success=True, request_index=0, memory_id="created-1"),
-                FakeBatchMemoryResult(success=True, request_index=0, memory_id="created-2"),
+                FakeBatchMemoryResult(
+                    success=True, request_index=0, memory_id="created-1"
+                ),
+                FakeBatchMemoryResult(
+                    success=True, request_index=0, memory_id="created-2"
+                ),
             ]
         )
     )
@@ -704,15 +714,23 @@ def test_add_texts_rejects_invalid_request_ordering_from_backend(
     [
         (
             [
-                FakeBatchMemoryResult(success=True, request_index=True, memory_id="memory-1"),
-                FakeBatchMemoryResult(success=True, request_index=1, memory_id="memory-2"),
+                FakeBatchMemoryResult(
+                    success=True, request_index=True, memory_id="memory-1"
+                ),
+                FakeBatchMemoryResult(
+                    success=True, request_index=1, memory_id="memory-2"
+                ),
             ],
             "without a valid request_index",
         ),
         (
             [
-                FakeBatchMemoryResult(success=True, request_index=2, memory_id="memory-1"),
-                FakeBatchMemoryResult(success=True, request_index=1, memory_id="memory-2"),
+                FakeBatchMemoryResult(
+                    success=True, request_index=2, memory_id="memory-1"
+                ),
+                FakeBatchMemoryResult(
+                    success=True, request_index=1, memory_id="memory-2"
+                ),
             ],
             "out-of-range request_index 2",
         ),
@@ -723,9 +741,7 @@ def test_add_texts_rejects_other_invalid_request_index_shapes(
     results: list[FakeBatchMemoryResult],
     match: str,
 ) -> None:
-    transport = FakeTransport(
-        batch_response=FakeBatchMemoryResponse(results=results)
-    )
+    transport = FakeTransport(batch_response=FakeBatchMemoryResponse(results=results))
     _patch_transports(monkeypatch, transport)
     store = GoodMemVectorStore(space_id="space-123", connection=_connection())
 
@@ -752,7 +768,9 @@ def test_add_texts_rejects_backend_result_count_mismatch(
     transport = FakeTransport(
         batch_response=FakeBatchMemoryResponse(
             results=[
-                FakeBatchMemoryResult(success=True, request_index=0, memory_id="memory-1")
+                FakeBatchMemoryResult(
+                    success=True, request_index=0, memory_id="memory-1"
+                )
             ]
         )
     )
@@ -813,7 +831,9 @@ def test_add_texts_raises_partial_failure_from_backend_response(
     transport = FakeTransport(
         batch_response=FakeBatchMemoryResponse(
             results=[
-                FakeBatchMemoryResult(success=True, request_index=0, memory_id="memory-1"),
+                FakeBatchMemoryResult(
+                    success=True, request_index=0, memory_id="memory-1"
+                ),
                 FakeBatchMemoryResult(
                     success=False,
                     request_index=1,
@@ -892,14 +912,14 @@ def test_add_texts_normalizes_failure_responses(
     results: list[FakeBatchMemoryResult],
     match: str,
 ) -> None:
-    transport = FakeTransport(
-        batch_response=FakeBatchMemoryResponse(results=results)
-    )
+    transport = FakeTransport(batch_response=FakeBatchMemoryResponse(results=results))
     _patch_transports(monkeypatch, transport)
     store = GoodMemVectorStore(space_id="space-123", connection=_connection())
 
     with pytest.raises((GoodMemDuplicateIDError, GoodMemAPIError), match=match):
-        store.add_texts(["alpha"] * len(results), ids=[f"memory-{i}" for i in range(len(results))])
+        store.add_texts(
+            ["alpha"] * len(results), ids=[f"memory-{i}" for i in range(len(results))]
+        )
 
 
 def test_similarity_search_maps_documents_and_merged_metadata(

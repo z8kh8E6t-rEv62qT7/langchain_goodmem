@@ -47,8 +47,8 @@ Common setup failures covered by this module include:
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import os
+from collections.abc import Callable
 from typing import TypeVar
 
 from langchain_core.embeddings import Embeddings
@@ -108,7 +108,7 @@ class GoodMemEmbeddings(Embeddings):
         dimensionality: int,
         upstream_api_key: str | None = None,
         display_name: str | None = None,
-    ) -> "GoodMemEmbeddings":
+    ) -> GoodMemEmbeddings:
         """Find or create one compatible GoodMem embedder and return it.
 
         This helper resolves one ``OPENAI``-compatible embedder that can back
@@ -167,7 +167,7 @@ class GoodMemEmbeddings(Embeddings):
         *,
         connection: GoodMemConnection | None = None,
         verify: bool | str = True,
-    ) -> "GoodMemEmbeddings":
+    ) -> GoodMemEmbeddings:
         """Build one bootstrap-backed embeddings adapter from environment.
 
         This helper reuses the current ``GOODMEM_EMBEDDINGS_*`` contract to

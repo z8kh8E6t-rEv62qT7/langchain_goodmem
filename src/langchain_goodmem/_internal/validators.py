@@ -244,7 +244,9 @@ def normalize_metadatas(
                 strict=True,
             )
         except ValidationError as exc:
-            raise ValueError(f"metadatas at index {index} must be a mapping or None.")
+            raise ValueError(
+                f"metadatas at index {index} must be a mapping or None."
+            ) from exc
         normalized.append(dict(validated_metadata))
     return normalized
 
@@ -358,7 +360,8 @@ def validate_duplicate_ids(ids: list[str | None] | None) -> None:
     if duplicates:
         duplicate_list = ", ".join(sorted(duplicates))
         raise GoodMemDuplicateIDError(
-            f"Duplicate memory IDs were provided for strict-create writes: {duplicate_list}."
+            "Duplicate memory IDs were provided for strict-create writes: "
+            f"{duplicate_list}."
         )
 
 
@@ -385,7 +388,7 @@ def validate_similarity_search_inputs(
     try:
         validated_query = _STRICT_STRING_ADAPTER.validate_python(query, strict=True)
     except ValidationError as exc:
-        raise ValueError("query must be a non-empty string.")
+        raise ValueError("query must be a non-empty string.") from exc
     if not validated_query.strip():
         raise ValueError("query must be a non-empty string.")
 
@@ -430,9 +433,7 @@ def raise_for_unexpected_kwargs(operation: str, kwargs: dict[str, Any]) -> None:
         raise ValueError(
             f"{operation} got an unexpected keyword argument: {argument_list}."
         )
-    raise ValueError(
-        f"{operation} got unexpected keyword arguments: {argument_list}."
-    )
+    raise ValueError(f"{operation} got unexpected keyword arguments: {argument_list}.")
 
 
 def _normalize_optional_id(
@@ -445,7 +446,9 @@ def _normalize_optional_id(
     try:
         validated = _STRICT_OPTIONAL_STRING_ADAPTER.validate_python(value, strict=True)
     except ValidationError as exc:
-        raise exception_type(f"{source} at index {index} must be a string or None.")
+        raise exception_type(
+            f"{source} at index {index} must be a string or None."
+        ) from exc
     if validated is None:
         return None
     if not validated.strip():

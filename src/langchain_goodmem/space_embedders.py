@@ -49,7 +49,9 @@ class GoodMemSpaceEmbedder:
     default_retrieval_weight: float | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "embedder_id", _normalize_embedder_id(self.embedder_id))
+        object.__setattr__(
+            self, "embedder_id", _normalize_embedder_id(self.embedder_id)
+        )
         object.__setattr__(
             self,
             "default_retrieval_weight",
@@ -68,7 +70,7 @@ def _normalize_embedder_id(value: str) -> str:
 def _normalize_default_retrieval_weight(value: float | None) -> float | None:
     if value is None:
         return None
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         raise GoodMemConfigurationError(
             "GoodMemSpaceEmbedder default_retrieval_weight must be a number or None."
         )
